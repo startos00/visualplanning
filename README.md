@@ -3,7 +3,7 @@
 A **visual prototype**: a deep-sea canvas where you can map a project at **Strategic (big picture)** and **Tactical (execution)** levels, plus **Resource (research)** nodes. Everything saves to **localStorage** (no backend).
 
 ### Why you built it
-I want to solve my anxiety of not getting anything done. I also want to visual my research, strategy, and execuation. Basically the whole project life cycle in one platform.
+I want to solve my anxiety of not getting anything done. I also want to visualise my research, strategy, and execution. Basically the whole project life cycle in one platform.
 ### What works today
 The features, the garden(rewarding system), cards&nodes, mascot assistants, the app logo
 
