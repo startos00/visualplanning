@@ -6,7 +6,9 @@ A **visual prototype**: a deep-sea canvas where you can map a project at **Strat
 I want to solve my anxiety of not getting anything done. I also want to visualise my research, strategy, and execution. Basically the whole project life cycle in one platform.
 ### What works today
 The main features: the garden(rewarding system), cards&nodes, mascot assistants, the app logo, roles/spawing (ai visual planning templates)
-
+### What would you add with more time?
+An ai assistant chatbot to help me research, parse the document, generate tasks, summarise docs, create a task summary.
+### What works today
 ## Getting Started
 
 actually use pnpm 
