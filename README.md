@@ -1,22 +1,26 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Grimpo Lite
+
+A **visual prototype**: a deep-sea canvas where you can map a project at **Strategic (big picture)** and **Tactical (execution)** levels, plus **Resource (research)** nodes. Everything saves to **localStorage** (no backend).
 
 ## Getting Started
 
-First, run the development server:
+Install and run:
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Quick demo script (60 seconds)
+
+- Pan/zoom the abyss canvas.
+- Click the **+** FAB to add Strategy/Tactical/Resource nodes.
+- Connect nodes with glowing edges.
+- Toggle **Auto / Strategy / Tactical** (top-right).
+- Mark Tactical nodes **Done**; click **Swallow** to delete.
+- Refresh the page: your map persists.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
