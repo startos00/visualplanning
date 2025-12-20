@@ -16,6 +16,7 @@ import type { GrimpoNodeData, ModeSetting, NodeKind } from "@/app/lib/graph";
 import { seedGraph } from "@/app/lib/graph";
 import { nodeTypes } from "@/app/nodes/nodeTypes";
 import { clearState, loadState, saveState } from "@/app/lib/storage";
+import { DumboOctopus } from "@/app/components/DumboOctopus";
 
 export default function Home() {
   const seeded = seedGraph();
@@ -26,6 +27,7 @@ export default function Home() {
   const [modeSetting, setModeSetting] = useState<ModeSetting>("auto");
   const [addOpen, setAddOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [octopusInstances, setOctopusInstances] = useState<string[]>([]);
 
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const rfRef = useRef<any>(null);
@@ -83,6 +85,16 @@ export default function Home() {
     [setEdges, setNodes],
   );
 
+  const onTaskDone = useCallback((nodeId: string) => {
+    // Generate unique ID for this octopus instance
+    const octopusId = `octopus-${nodeId}-${Date.now()}`;
+    setOctopusInstances((prev) => [...prev, octopusId]);
+  }, []);
+
+  const onOctopusComplete = useCallback((octopusId: string) => {
+    setOctopusInstances((prev) => prev.filter((id) => id !== octopusId));
+  }, []);
+
   // Phase 3: pass zoom + callbacks down to glass nodes (ephemeral, not persisted).
   const viewNodes = useMemo(() => {
     return nodes.map((n) => ({
@@ -94,9 +106,10 @@ export default function Home() {
         mode: effectiveMode,
         onUpdate: onUpdateNode,
         onDelete: onDeleteNode,
+        onTaskDone: onTaskDone,
       },
     }));
-  }, [effectiveMode, nodes, onDeleteNode, onUpdateNode, viewport.zoom]);
+  }, [effectiveMode, nodes, onDeleteNode, onTaskDone, onUpdateNode, viewport.zoom]);
 
   const defaultEdgeOptions: Edge = useMemo(
     () => ({
@@ -142,6 +155,11 @@ export default function Home() {
       ref={wrapperRef}
       className="relative h-screen w-screen bg-gradient-to-b from-slate-950 via-slate-950 to-black"
     >
+      {/* Dumbo Octopus Celebration Animations */}
+      {octopusInstances.map((octopusId) => (
+        <DumboOctopus key={octopusId} id={octopusId} onComplete={onOctopusComplete} />
+      ))}
+
       <ReactFlow
         nodes={viewNodes}
         edges={edges}

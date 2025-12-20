@@ -14,6 +14,7 @@ type GlassNodeData = GrimpoNodeData & {
   mode?: EffectiveMode;
   onUpdate?: (id: string, patch: Partial<GrimpoNodeData>) => void;
   onDelete?: (id: string) => void;
+  onTaskDone?: (id: string) => void;
 };
 
 function typeBadge(type: NodeKind) {
@@ -122,9 +123,15 @@ export function GlassNode(props: NodeProps<GlassNodeData, NodeKind>) {
                   <input
                     type="checkbox"
                     checked={data.status === "done"}
-                    onChange={(e) =>
-                      data.onUpdate?.(id, { status: e.target.checked ? "done" : "todo" })
-                    }
+                    onChange={(e) => {
+                      const wasDone = data.status === "done";
+                      const isNowDone = e.target.checked;
+                      data.onUpdate?.(id, { status: isNowDone ? "done" : "todo" });
+                      // Trigger octopus celebration only when marking as done (not when unchecking)
+                      if (!wasDone && isNowDone) {
+                        data.onTaskDone?.(id);
+                      }
+                    }}
                     className="h-4 w-4 accent-cyan-300"
                   />
                   Done
