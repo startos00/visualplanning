@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ExternalLink, Sparkles, Target, Wrench } from "lucide-react";
 import type { NodeProps } from "reactflow";
 import { Handle, Position } from "reactflow";
@@ -28,10 +28,45 @@ function typeBadge(type: NodeKind) {
   }
 }
 
-export function GlassNode(props: NodeProps<GlassNodeData, NodeKind>) {
+function getYouTubeEmbedUrl(input: string): string | null {
+  if (!input) return null;
+  try {
+    const url = new URL(input);
+    const host = url.hostname.replace(/^www\./, "");
+
+    // youtu.be/<id>
+    if (host === "youtu.be") {
+      const id = url.pathname.split("/").filter(Boolean)[0];
+      return id ? `https://www.youtube.com/embed/${id}` : null;
+    }
+
+    // youtube.com/watch?v=<id>
+    if (host === "youtube.com" || host === "m.youtube.com") {
+      if (url.pathname === "/watch") {
+        const id = url.searchParams.get("v");
+        return id ? `https://www.youtube.com/embed/${id}` : null;
+      }
+
+      // youtube.com/embed/<id>
+      if (url.pathname.startsWith("/embed/")) {
+        const id = url.pathname.split("/")[2];
+        return id ? `https://www.youtube.com/embed/${id}` : null;
+      }
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function GlassNode(props: NodeProps<GlassNodeData>) {
   const { id, data, type, selected } = props;
 
   const [swallowing, setSwallowing] = useState(false);
+  const [localPdfPreviewUrl, setLocalPdfPreviewUrl] = useState<string | null>(null);
+  const [localPdfName, setLocalPdfName] = useState<string>("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const zoom = data.zoom ?? 1;
   const mode = data.mode ?? "tactical";
@@ -39,8 +74,16 @@ export function GlassNode(props: NodeProps<GlassNodeData, NodeKind>) {
   // Semantic zoom: zoomed out means "title-only" (big picture).
   const titleOnly = mode === "strategy" || zoom < 1;
 
-  const badge = typeBadge(type);
-  const done = type === "tactical" && data.status === "done";
+  const nodeKind = type as NodeKind;
+  const badge = typeBadge(nodeKind);
+  const done = nodeKind === "tactical" && data.status === "done";
+
+  // Cleanup object URL when it changes or node unmounts.
+  useEffect(() => {
+    return () => {
+      if (localPdfPreviewUrl) URL.revokeObjectURL(localPdfPreviewUrl);
+    };
+  }, [localPdfPreviewUrl]);
 
   return (
     <div
@@ -102,12 +145,147 @@ export function GlassNode(props: NodeProps<GlassNodeData, NodeKind>) {
         {!titleOnly ? (
           <div className="mt-3 space-y-3">
             {type === "resource" ? (
-              <input
-                value={data.link ?? ""}
-                onChange={(e) => data.onUpdate?.(id, { link: e.target.value })}
-                placeholder="Link (URL)…"
-                className="w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 text-sm text-cyan-50 outline-none placeholder:text-cyan-200/30 focus:border-cyan-200/40"
-              />
+              <div className="space-y-2">
+                <input
+                  value={data.link ?? ""}
+                  onChange={(e) => data.onUpdate?.(id, { link: e.target.value })}
+                  placeholder="Link (URL)…"
+                  className="w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 text-sm text-cyan-50 outline-none placeholder:text-cyan-200/30 focus:border-cyan-200/40"
+                />
+                <input
+                  value={data.pdfUrl ?? ""}
+                  onChange={(e) => data.onUpdate?.(id, { pdfUrl: e.target.value })}
+                  placeholder="PDF URL…"
+                  className="w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 text-sm text-cyan-50 outline-none placeholder:text-cyan-200/30 focus:border-cyan-200/40"
+                />
+                <input
+                  value={data.videoUrl ?? ""}
+                  onChange={(e) => data.onUpdate?.(id, { videoUrl: e.target.value })}
+                  placeholder="YouTube URL…"
+                  className="w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 text-sm text-cyan-50 outline-none placeholder:text-cyan-200/30 focus:border-cyan-200/40"
+                />
+
+                {/* Upload PDF preview-only (not persisted) */}
+                <div className="flex items-center justify-between gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="application/pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+
+                      // Replace previous preview URL (cleanup happens in effect).
+                      setLocalPdfPreviewUrl((prev) => {
+                        if (prev) URL.revokeObjectURL(prev);
+                        return URL.createObjectURL(file);
+                      });
+                      setLocalPdfName(file.name);
+                    }}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="rounded-full border border-rose-300/20 bg-rose-500/10 px-3 py-1 text-xs text-rose-200 shadow-[0_0_14px_rgba(244,63,94,0.18)] hover:bg-rose-500/20"
+                    title="Upload a PDF for session-only preview (won’t persist on refresh)"
+                  >
+                    Upload PDF (preview)
+                  </button>
+
+                  {localPdfPreviewUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLocalPdfPreviewUrl((prev) => {
+                          if (prev) URL.revokeObjectURL(prev);
+                          return null;
+                        });
+                        setLocalPdfName("");
+                        if (fileInputRef.current) fileInputRef.current.value = "";
+                      }}
+                      className="rounded-full border border-cyan-300/20 bg-slate-950/30 px-3 py-1 text-xs text-cyan-100/80 hover:bg-slate-950/45"
+                      title="Clear local PDF preview"
+                    >
+                      Clear
+                    </button>
+                  ) : null}
+                </div>
+
+                {localPdfName ? (
+                  <div className="text-xs text-cyan-100/60">
+                    Preview-only: {localPdfName} (won’t persist on refresh)
+                  </div>
+                ) : null}
+
+                {/* Previews */}
+                {(() => {
+                  const pdfSrc = localPdfPreviewUrl || (data.pdfUrl ?? "").trim();
+                  const ytEmbed = getYouTubeEmbedUrl((data.videoUrl ?? "").trim());
+
+                  return (
+                    <div className="space-y-2">
+                      {pdfSrc ? (
+                        <div className="rounded-2xl border border-cyan-300/20 bg-slate-950/20 p-2">
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <div className="text-xs tracking-widest text-cyan-100/70">PDF</div>
+                            <button
+                              type="button"
+                              onClick={() => window.open(pdfSrc, "_blank", "noopener,noreferrer")}
+                              className="inline-flex items-center gap-1 rounded-full border border-rose-300/20 bg-rose-500/10 px-2 py-1 text-xs text-rose-200 hover:bg-rose-500/20"
+                              title="Open PDF in new tab"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              Open
+                            </button>
+                          </div>
+                          <iframe
+                            title="PDF preview"
+                            src={pdfSrc}
+                            className="h-[200px] w-full rounded-xl border border-cyan-300/10 bg-black/20"
+                            loading="lazy"
+                          />
+                        </div>
+                      ) : null}
+
+                      {(data.videoUrl ?? "").trim() ? (
+                        <div className="rounded-2xl border border-cyan-300/20 bg-slate-950/20 p-2">
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <div className="text-xs tracking-widest text-cyan-100/70">VIDEO</div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                window.open((data.videoUrl ?? "").trim(), "_blank", "noopener,noreferrer")
+                              }
+                              className="inline-flex items-center gap-1 rounded-full border border-rose-300/20 bg-rose-500/10 px-2 py-1 text-xs text-rose-200 hover:bg-rose-500/20"
+                              title="Open video in new tab"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              Open
+                            </button>
+                          </div>
+
+                          {ytEmbed ? (
+                            <iframe
+                              title="YouTube preview"
+                              src={ytEmbed}
+                              className="h-[200px] w-full rounded-xl border border-cyan-300/10 bg-black/20"
+                              loading="lazy"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                              allowFullScreen
+                            />
+                          ) : (
+                            <div className="rounded-xl border border-cyan-300/10 bg-slate-950/20 px-3 py-2 text-xs text-cyan-100/70">
+                              Not a supported YouTube URL format. This MVP only embeds YouTube; use “Open”.
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })()}
+              </div>
             ) : null}
 
             <textarea

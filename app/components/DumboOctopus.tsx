@@ -7,6 +7,17 @@ interface DumboOctopusProps {
   onComplete: (id: string) => void;
 }
 
+function hashToUnitInterval(input: string): number {
+  // Simple, deterministic hash -> [0, 1). Keeps the component render pure (no Math.random()).
+  let h = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  // Convert to unsigned 32-bit, then scale to [0, 1)
+  return (h >>> 0) / 2 ** 32;
+}
+
 export function DumboOctopus({ id, onComplete }: DumboOctopusProps) {
   const [isVisible, setIsVisible] = useState(true);
 
@@ -27,9 +38,9 @@ export function DumboOctopus({ id, onComplete }: DumboOctopusProps) {
     };
   }, [id, onComplete]);
 
-  // Randomize starting side (left or right) and vertical position
-  const startSide = Math.random() > 0.5 ? "left" : "right";
-  const verticalPosition = Math.random() * 0.7 + 0.15; // 15% to 85% of viewport height
+  // Deterministic per-instance "randomness" derived from `id` (which includes a timestamp in `app/page.tsx`).
+  const startSide: "left" | "right" = hashToUnitInterval(id) > 0.5 ? "left" : "right";
+  const verticalPosition = hashToUnitInterval(`${id}:y`) * 0.7 + 0.15; // 15% to 85% of viewport height
 
   return (
     <div
