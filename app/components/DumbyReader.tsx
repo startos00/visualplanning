@@ -38,6 +38,8 @@ export function DumbyReader({
   const [lastSentText, setLastSentText] = useState<string>("");
   const [showSentNotification, setShowSentNotification] = useState(false);
   const [showSaveHighlightPopup, setShowSaveHighlightPopup] = useState(false);
+  const [showManualInput, setShowManualInput] = useState(false);
+  const [manualText, setManualText] = useState("");
   const [pendingHighlight, setPendingHighlight] = useState<{ text: string; position: any } | null>(null);
   const selectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSentRef = useRef<string>("");
@@ -93,15 +95,192 @@ export function DumbyReader({
     onViewModeChange?.("inline");
   };
 
-  // Handle text selection for highlighting - automatically send when text is selected
+  const handleSaveHighlight = async () => {
+    if (!pendingHighlight) return;
+
+    try {
+      // Save to database (for Resource Chamber)
+      await addHighlight(nodeId, pendingHighlight.text, pendingHighlight.position);
+      
+      // Send to shared intelligence (for Sonar Array)
+      onHighlight?.(pendingHighlight.text, pendingHighlight.position);
+
+      // Show notification
+      setShowSentNotification(true);
+      setTimeout(() => {
+        setShowSentNotification(false);
+      }, 2000);
+    } catch (error) {
+      console.error("Failed to save highlight:", error);
+    }
+
+    // Clear popup and selection
+    setShowSaveHighlightPopup(false);
+    setPendingHighlight(null);
+    
+    setTimeout(() => {
+      try {
+        const selection = window.getSelection();
+        if (selection) {
+          selection.removeAllRanges();
+        }
+        if (iframeRef.current) {
+          const iframe = iframeRef.current;
+          const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+          if (iframeDoc) {
+            const iframeSelection = iframeDoc.getSelection();
+            if (iframeSelection) {
+              iframeSelection.removeAllRanges();
+            }
+          }
+        }
+      } catch (e) {
+        // Ignore errors
+      }
+    }, 100);
+  };
+
+  const handleCancelHighlight = () => {
+    setShowSaveHighlightPopup(false);
+    setPendingHighlight(null);
+    lastSentRef.current = ""; // Allow re-selecting the same text
+    
+    // Clear selection
+    setTimeout(() => {
+      try {
+        const selection = window.getSelection();
+        if (selection) {
+          selection.removeAllRanges();
+        }
+        if (iframeRef.current) {
+          const iframe = iframeRef.current;
+          const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+          if (iframeDoc) {
+            const iframeSelection = iframeDoc.getSelection();
+            if (iframeSelection) {
+              iframeSelection.removeAllRanges();
+            }
+          }
+        }
+      } catch (e) {
+        // Ignore errors
+      }
+    }, 100);
+  };
+
+  const tryCaptureSelection = () => {
+    let text = "";
+    
+    // First try to get selection from iframe (works for same-origin PDFs)
+    if (iframeRef.current) {
+      try {
+        const iframe = iframeRef.current;
+        const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+        if (iframeDoc) {
+          const iframeSelection = iframeDoc.getSelection();
+          text = iframeSelection?.toString().trim() || "";
+        }
+      } catch (e) {
+        // Cross-origin - can't access iframe selection
+      }
+    }
+
+    // Fallback to main window selection
+    if (!text) {
+      const selection = window.getSelection();
+      text = selection?.toString().trim() || "";
+    }
+
+    if (text.length >= 3) {
+      setPendingHighlight({
+        text,
+        position: {
+          timestamp: Date.now(),
+          source: nodeTitle || nodeId,
+        },
+      });
+      setShowSaveHighlightPopup(true);
+      return true;
+    }
+    return false;
+  };
+
+  const handleManualHighlightClick = async () => {
+    // 1. Try to capture current selection (works for same-origin or main window)
+    const captured = tryCaptureSelection();
+    if (captured) return;
+
+    // 2. Try to read from clipboard (requires user permission prompt)
+    try {
+      // This will trigger a browser permission prompt the first time
+      const text = await navigator.clipboard.readText();
+      if (text && text.trim().length >= 3) {
+        setPendingHighlight({
+          text: text.trim(),
+          position: {
+            timestamp: Date.now(),
+            source: nodeTitle || nodeId,
+          },
+        });
+        setShowSaveHighlightPopup(true);
+        return;
+      }
+    } catch (e) {
+      // Permission denied or not supported - proceed to manual input
+      console.warn("Clipboard access denied:", e);
+    }
+
+    // 3. Fallback to manual input modal
+    setShowManualInput(true);
+  };
+
+  const handleManualSubmit = () => {
+    if (manualText.trim().length >= 3) {
+      setPendingHighlight({
+        text: manualText.trim(),
+        position: {
+          timestamp: Date.now(),
+          source: nodeTitle || nodeId,
+        },
+      });
+      setShowManualInput(false);
+      setManualText("");
+      setShowSaveHighlightPopup(true);
+    }
+  };
+
+  // Handle global paste event as a shortcut
   useEffect(() => {
     if (viewMode !== "compact" && viewMode !== "bathysphere") return;
-    if (!onHighlight) return;
 
-    const checkAndSendSelection = () => {
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      // If we're already showing a popup, don't interrupt
+      if (showSaveHighlightPopup || showManualInput) return;
+
+      const text = e.clipboardData?.getData("text");
+      if (text && text.trim().length >= 3) {
+        setPendingHighlight({
+          text: text.trim(),
+          position: {
+            timestamp: Date.now(),
+            source: nodeTitle || nodeId,
+          },
+        });
+        setShowSaveHighlightPopup(true);
+      }
+    };
+
+    window.addEventListener("paste", handleGlobalPaste);
+    return () => window.removeEventListener("paste", handleGlobalPaste);
+  }, [viewMode, showSaveHighlightPopup, showManualInput, nodeTitle, nodeId]);
+
+  // Handle text selection for highlighting - keep automatic check for same-origin
+  useEffect(() => {
+    if (viewMode !== "compact" && viewMode !== "bathysphere") return;
+
+    const checkSelection = () => {
+      // Automatic detection for same-origin/main window
       let text = "";
-      
-      // First try to get selection from iframe (works for same-origin PDFs)
       if (iframeRef.current) {
         try {
           const iframe = iframeRef.current;
@@ -110,111 +289,34 @@ export function DumbyReader({
             const iframeSelection = iframeDoc.getSelection();
             text = iframeSelection?.toString().trim() || "";
           }
-        } catch (e) {
-          // Cross-origin - can't access iframe selection, try main window
-          const selection = window.getSelection();
-          text = selection?.toString().trim() || "";
-        }
-      } else {
-        // Fallback to main window selection
+        } catch (e) {}
+      }
+      if (!text) {
         const selection = window.getSelection();
         text = selection?.toString().trim() || "";
       }
 
-      // Only send if:
-      // 1. Text exists
-      // 2. It's different from what we last sent (avoid duplicates)
-      // 3. It's at least 3 characters (avoid accidental single character selections)
       if (text.length >= 3 && text !== lastSentRef.current) {
-        lastSentRef.current = text;
-        setLastSentText(text);
-        
-        // Save to database (for Resource Chamber)
-        addHighlight(nodeId, text, {
-          timestamp: Date.now(),
-          source: nodeTitle || nodeId,
-        }).catch((error) => {
-          console.error("Failed to save highlight:", error);
-        });
-        
-        // Send to shared intelligence (for Sonar Array)
-        onHighlight?.(text, {
-          timestamp: Date.now(),
-          source: nodeTitle || nodeId,
-        });
-
-        // Show notification
-        setShowSentNotification(true);
-        setTimeout(() => {
-          setShowSentNotification(false);
-        }, 2000);
-
-        // Clear selection after a short delay
-        setTimeout(() => {
-          try {
-            const selection = window.getSelection();
-            if (selection) {
-              selection.removeAllRanges();
-            }
-            if (iframeRef.current) {
-              const iframe = iframeRef.current;
-              const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-              if (iframeDoc) {
-                const iframeSelection = iframeDoc.getSelection();
-                if (iframeSelection) {
-                  iframeSelection.removeAllRanges();
-                }
-              }
-            }
-          } catch (e) {
-            // Ignore errors
-          }
-        }, 500);
+        // Only trigger popup if we're not already showing one
+        if (!showSaveHighlightPopup && !showManualInput) {
+          lastSentRef.current = text;
+          setPendingHighlight({
+            text,
+            position: {
+              timestamp: Date.now(),
+              source: nodeTitle || nodeId,
+            },
+          });
+          setShowSaveHighlightPopup(true);
+        }
       }
     };
 
-    // Listen for mouseup events (when user finishes selecting)
-    const handleMouseUp = () => {
-      // Delay to let selection settle
-      setTimeout(checkAndSendSelection, 150);
-    };
-
-    // Listen for selection changes
-    const handleSelectionChange = () => {
-      // Debounce to avoid sending multiple times
-      if (selectionTimeoutRef.current) {
-        clearTimeout(selectionTimeoutRef.current);
-      }
-      selectionTimeoutRef.current = setTimeout(checkAndSendSelection, 300);
-    };
-
-    // Listen for copy events (user might copy after selecting)
-    const handleCopy = () => {
-      setTimeout(checkAndSendSelection, 100);
-    };
-
+    const handleMouseUp = () => setTimeout(checkSelection, 200);
     document.addEventListener("mouseup", handleMouseUp);
-    document.addEventListener("selectionchange", handleSelectionChange);
-    document.addEventListener("copy", handleCopy);
     
-    // Also check periodically (helps catch selections that might be missed)
-    const interval = setInterval(() => {
-      const selection = window.getSelection();
-      if (selection && selection.toString().trim().length >= 3) {
-        checkAndSendSelection();
-      }
-    }, 1000);
-
-    return () => {
-      document.removeEventListener("mouseup", handleMouseUp);
-      document.removeEventListener("selectionchange", handleSelectionChange);
-      document.removeEventListener("copy", handleCopy);
-      clearInterval(interval);
-      if (selectionTimeoutRef.current) {
-        clearTimeout(selectionTimeoutRef.current);
-      }
-    };
-  }, [viewMode, onHighlight, nodeTitle, nodeId]);
+    return () => document.removeEventListener("mouseup", handleMouseUp);
+  }, [viewMode, showSaveHighlightPopup, showManualInput, nodeTitle, nodeId]);
 
   if (viewMode === "compact") {
     // Compact mode for Sonar Array - no sidebar, just PDF
@@ -227,9 +329,107 @@ export function DumbyReader({
           className="h-full w-full rounded-xl border border-cyan-300/20 bg-black/20"
           loading="lazy"
         />
-        {/* Notification when text is automatically sent */}
+        
+        {/* Floating Save Button - Always visible as a trigger */}
+        <div className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2">
+          {!showSaveHighlightPopup && !showManualInput && (
+            <button
+              onClick={handleManualHighlightClick}
+              className="flex items-center gap-2 rounded-full border border-cyan-300/30 bg-slate-950/95 px-4 py-2 text-sm font-medium text-cyan-50 shadow-[0_0_24px_rgba(34,211,238,0.4)] backdrop-blur-md transition-all hover:bg-cyan-500/20 hover:shadow-[0_0_32px_rgba(34,211,238,0.5)]"
+              title="Tip: Select text and Copy (Ctrl+C) first if it's an external PDF"
+            >
+              <Send className="h-4 w-4" />
+              Save Selection
+            </button>
+          )}
+        </div>
+
+        {/* Manual Input Modal - Fallback for CORS iframes */}
+        {showManualInput && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+            <div className="mx-4 w-full max-w-md rounded-2xl border border-cyan-300/30 bg-slate-950/95 p-6 shadow-[0_0_32px_rgba(34,211,238,0.4)] backdrop-blur-md">
+              <h3 className="mb-3 text-lg font-semibold text-cyan-50">Capture Highlight</h3>
+              <p className="mb-4 text-xs text-cyan-300/60 leading-relaxed">
+                Browser security prevents automatic detection for this document. 
+                <br /><br />
+                <strong>Simple Step:</strong> Select your text, <strong>Copy it (Ctrl+C)</strong>, then click <strong>Confirm & Save</strong> below:
+              </p>
+              <textarea
+                value={manualText}
+                onChange={(e) => setManualText(e.target.value)}
+                placeholder="Paste text here..."
+                className="mb-4 w-full min-h-[100px] rounded-xl border border-cyan-300/20 bg-slate-900/60 p-3 text-sm text-cyan-50 placeholder:text-cyan-300/30 outline-none focus:border-cyan-400/50"
+                autoFocus
+              />
+              <div className="flex gap-3">
+                <button
+                  onClick={async () => {
+                    try {
+                      const text = await navigator.clipboard.readText();
+                      if (text) setManualText(text);
+                    } catch (e) {}
+                  }}
+                  className="rounded-lg border border-cyan-300/20 bg-slate-800/60 px-4 py-2 text-xs text-cyan-200"
+                >
+                  Paste from Clipboard
+                </button>
+                <button
+                  onClick={handleManualSubmit}
+                  disabled={manualText.trim().length < 3}
+                  className="flex-1 rounded-lg border border-cyan-300/30 bg-cyan-500/20 px-4 py-2 text-sm font-medium text-cyan-50 transition-all hover:bg-cyan-500/30"
+                >
+                  Confirm & Save
+                </button>
+                <button
+                  onClick={() => {
+                    setShowManualInput(false);
+                    setManualText("");
+                  }}
+                  className="rounded-lg border border-cyan-300/20 bg-slate-950/60 px-4 py-2 text-sm text-cyan-300/70"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Save Highlight Popup - Confirmation */}
+        {showSaveHighlightPopup && pendingHighlight && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+            <div 
+              className="mx-4 w-full max-w-md rounded-2xl border border-cyan-300/30 bg-slate-950/95 p-6 shadow-[0_0_32px_rgba(34,211,238,0.4)] backdrop-blur-md"
+              style={{
+                animation: "fadeInSlideUp 0.3s ease-in-out",
+              }}
+            >
+              <h3 className="mb-3 text-lg font-semibold text-cyan-50">Save Highlight?</h3>
+              <div className="mb-4 rounded-lg border border-cyan-300/20 bg-slate-900/60 p-3 max-h-[200px] overflow-y-auto">
+                <p className="text-sm italic text-cyan-100/90 leading-relaxed">
+                  "{pendingHighlight.text}"
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleSaveHighlight}
+                  className="flex-1 rounded-lg border border-cyan-300/30 bg-cyan-500/20 px-4 py-2 text-sm font-medium text-cyan-50 transition-all hover:bg-cyan-500/30 hover:shadow-[0_0_16px_rgba(34,211,238,0.3)]"
+                >
+                  Save Highlight
+                </button>
+                <button
+                  onClick={handleCancelHighlight}
+                  className="rounded-lg border border-cyan-300/20 bg-slate-950/60 px-4 py-2 text-sm text-cyan-300/70 transition-all hover:bg-slate-950/80"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Notification */}
         {showSentNotification && (
-          <div className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2">
+          <div className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 pointer-events-none">
             <div 
               className="flex items-center gap-2 rounded-full border border-cyan-300/30 bg-slate-950/95 px-4 py-2 text-sm font-medium text-cyan-50 shadow-[0_0_24px_rgba(34,211,238,0.4)] backdrop-blur-md"
               style={{
@@ -237,7 +437,7 @@ export function DumbyReader({
               }}
             >
               <Send className="h-4 w-4" />
-              Sent to Shared Intelligence
+              Saved to Resource Chamber
             </div>
           </div>
         )}
@@ -269,7 +469,7 @@ export function DumbyReader({
             </button>
           </div>
           
-          {/* PDF with glow effect */}
+          {/* PDF container with glow effect */}
           <div
             ref={containerRef}
             className="flex-1 overflow-hidden p-8"
@@ -284,22 +484,131 @@ export function DumbyReader({
               className="h-full w-full rounded-xl border border-cyan-300/10 bg-black/20"
               loading="lazy"
             />
-            {/* Notification when text is automatically sent */}
-            {showSentNotification && (
-              <div className="absolute bottom-8 left-1/2 z-20 -translate-x-1/2">
+            
+            {/* Floating Save Button - Always visible */}
+            <div className="absolute bottom-12 left-1/2 z-20 -translate-x-1/2">
+              {!showSaveHighlightPopup && !showManualInput && (
+                <button
+                  onClick={handleManualHighlightClick}
+                  className="flex items-center gap-2 rounded-full border border-cyan-300/30 bg-slate-950/95 px-6 py-3 text-base font-medium text-cyan-50 shadow-[0_0_32px_rgba(34,211,238,0.5)] backdrop-blur-md transition-all hover:bg-cyan-500/20 hover:shadow-[0_0_48px_rgba(34,211,238,0.6)]"
+                >
+                  <Send className="h-5 w-5" />
+                  Save Selection
+                </button>
+              )}
+            </div>
+
+            {/* Manual Input Modal */}
+            {showManualInput && (
+              <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 backdrop-blur-md">
+                <div className="mx-4 w-full max-w-lg rounded-2xl border border-cyan-300/30 bg-slate-950/95 p-8 shadow-[0_0_48px_rgba(34,211,238,0.5)] backdrop-blur-md">
+                  <h3 className="mb-4 text-xl font-semibold text-cyan-50">Capture Highlight</h3>
+                  <p className="mb-6 text-sm text-cyan-300/60 leading-relaxed">
+                    Browser security prevents automatic detection for this document. 
+                    <br /><br />
+                    <strong>Simple Step:</strong> Select your text, <strong>Copy it (Ctrl+C)</strong>, then click <strong>Confirm & Save</strong> below:
+                  </p>
+                  <textarea
+                    value={manualText}
+                    onChange={(e) => setManualText(e.target.value)}
+                    placeholder="Paste text here..."
+                    className="mb-6 w-full min-h-[150px] rounded-xl border border-cyan-300/20 bg-slate-900/60 p-4 text-sm text-cyan-50 placeholder:text-cyan-300/30 outline-none focus:border-cyan-400/50"
+                    autoFocus
+                  />
+                  <div className="flex gap-4">
+                    <button
+                      onClick={async () => {
+                        try {
+                          const text = await navigator.clipboard.readText();
+                          if (text) setManualText(text);
+                        } catch (e) {}
+                      }}
+                      className="rounded-xl border border-cyan-300/20 bg-slate-800/60 px-6 py-3 text-sm text-cyan-200"
+                    >
+                      Paste Text
+                    </button>
+                    <button
+                      onClick={handleManualSubmit}
+                      disabled={manualText.trim().length < 3}
+                      className="flex-1 rounded-xl border border-cyan-300/30 bg-cyan-500/20 px-6 py-3 text-sm font-medium text-cyan-50 transition-all hover:bg-cyan-500/30"
+                    >
+                      Confirm & Save
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowManualInput(false);
+                        setManualText("");
+                      }}
+                      className="rounded-xl border border-cyan-300/20 bg-slate-950/60 px-6 py-3 text-sm text-cyan-300/70"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Save Highlight Popup - Confirmation */}
+            {showSaveHighlightPopup && pendingHighlight && (
+              <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 backdrop-blur-md">
                 <div 
-                  className="flex items-center gap-2 rounded-full border border-cyan-300/30 bg-slate-950/95 px-4 py-2 text-sm font-medium text-cyan-50 shadow-[0_0_24px_rgba(34,211,238,0.4)] backdrop-blur-md"
+                  className="mx-4 w-full max-w-lg rounded-2xl border border-cyan-300/30 bg-slate-950/95 p-8 shadow-[0_0_48px_rgba(34,211,238,0.5)] backdrop-blur-md"
+                  style={{
+                    animation: "fadeInSlideUp 0.3s ease-in-out",
+                  }}
+                >
+                  <h3 className="mb-4 text-xl font-semibold text-cyan-50">Save Highlight?</h3>
+                  <div className="mb-6 rounded-xl border border-cyan-300/20 bg-slate-900/60 p-4 max-h-[300px] overflow-y-auto">
+                    <p className="text-sm italic text-cyan-100/90 leading-relaxed">
+                      "{pendingHighlight.text}"
+                    </p>
+                  </div>
+                  <div className="flex gap-4">
+                    <button
+                      onClick={handleSaveHighlight}
+                      className="flex-1 rounded-xl border border-cyan-300/30 bg-cyan-500/20 px-6 py-3 text-sm font-medium text-cyan-50 transition-all hover:bg-cyan-500/30 hover:shadow-[0_0_24px_rgba(34,211,238,0.4)]"
+                    >
+                      Save Highlight
+                    </button>
+                    <button
+                      onClick={handleCancelHighlight}
+                      className="rounded-xl border border-cyan-300/20 bg-slate-950/60 px-6 py-3 text-sm text-cyan-300/70 transition-all hover:bg-slate-950/80"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Notification when text is saved */}
+            {showSentNotification && (
+              <div className="absolute bottom-12 left-1/2 z-20 -translate-x-1/2 pointer-events-none">
+                <div 
+                  className="flex items-center gap-2 rounded-full border border-cyan-300/30 bg-slate-950/95 px-6 py-3 text-base font-medium text-cyan-50 shadow-[0_0_32px_rgba(34,211,238,0.5)] backdrop-blur-md"
                   style={{
                     animation: "fadeInSlideUp 0.3s ease-in-out",
                   }}
                 >
                   <Send className="h-4 w-4" />
-                  Sent to Shared Intelligence
+                  Saved to Resource Chamber
                 </div>
               </div>
             )}
           </div>
         </div>
+        <style dangerouslySetInnerHTML={{__html: `
+          @keyframes fadeInSlideUp {
+            from {
+              opacity: 0;
+              transform: translateY(10px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+        `}} />
       </div>
     );
   }
@@ -317,4 +626,3 @@ export function DumbyReader({
     </div>
   );
 }
-
