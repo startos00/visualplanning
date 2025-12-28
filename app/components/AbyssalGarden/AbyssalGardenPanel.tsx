@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Coins, ShoppingBag, Sparkles, X } from "lucide-react";
+import { Coins, ShoppingBag, Sparkles, X, Palette, Maximize2, Minimize2 } from "lucide-react";
 import {
   ABYSSAL_EVENT,
   ABYSSAL_ITEMS,
@@ -16,6 +16,8 @@ import {
   tryPlaceFromInventory,
   tryPurchase,
   updatePlacedItemPosition,
+  updatePlacedItemScale,
+  updatePlacedItemColor,
 } from "@/app/lib/abyssalGarden";
 import { loadAbyssalGardenState } from "@/app/lib/abyssalGardenState";
 
@@ -31,17 +33,46 @@ function isAbyssalItemId(x: string): x is AbyssalItemId {
 }
 
 function itemArtClass(itemId: AbyssalItemId): string {
+  const baseClass = "abyssal-art";
   switch (itemId) {
     case "abyssal-rock":
-      return "abyssal-art abyssal-rock";
+      return `${baseClass} abyssal-rock`;
+    case "seaweed":
+      return `${baseClass} abyssal-seaweed`;
+    case "bubble":
+      return `${baseClass} abyssal-bubble`;
+    case "small-coral":
+      return `${baseClass} abyssal-small-coral`;
+    case "shrimp":
+      return `${baseClass} abyssal-shrimp`;
+    case "plankton":
+      return `${baseClass} abyssal-plankton`;
+    case "starfish":
+      return `${baseClass} abyssal-starfish`;
+    case "sea-flowers":
+      return `${baseClass} abyssal-sea-flowers`;
     case "neon-sandcastle":
-      return "abyssal-art abyssal-sandcastle";
+      return `${baseClass} abyssal-sandcastle`;
+    case "big-coral":
+      return `${baseClass} abyssal-big-coral`;
+    case "dumbo-octopus":
+      return `${baseClass} abyssal-dumbo-octopus`;
     case "crystalline-spire":
-      return "abyssal-art abyssal-spire";
+      return `${baseClass} abyssal-spire`;
+    case "turtle":
+      return `${baseClass} abyssal-turtle`;
+    case "shellfish":
+      return `${baseClass} abyssal-shellfish`;
+    case "michelangelos-david":
+      return `${baseClass} abyssal-david`;
+    case "roman-ruin":
+      return `${baseClass} abyssal-roman-ruin`;
     case "sirens-tail":
-      return "abyssal-art abyssal-tail";
+      return `${baseClass} abyssal-tail`;
+    case "whales":
+      return `${baseClass} abyssal-whales`;
     case "lost-bounty":
-      return "abyssal-art abyssal-bounty";
+      return `${baseClass} abyssal-bounty`;
   }
 }
 
@@ -52,6 +83,7 @@ export function AbyssalGardenPanel({ open, onClose }: Props) {
   const [layout, setLayout] = useState<AbyssalPlacedItem[]>(() => loadGardenLayout());
   const [selectedPlacedId, setSelectedPlacedId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [showColorPicker, setShowColorPicker] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<
@@ -61,6 +93,14 @@ export function AbyssalGardenPanel({ open, onClose }: Props) {
         offsetY: number;
         lastX: number;
         lastY: number;
+      }
+    | null
+  >(null);
+  const resizeStateRef = useRef<
+    | {
+        id: string;
+        startScale: number;
+        startDistance: number;
       }
     | null
   >(null);
@@ -198,6 +238,92 @@ export function AbyssalGardenPanel({ open, onClose }: Props) {
     updatePlacedItemPosition({ id: dragging.id, x: dragging.lastX, y: dragging.lastY });
   }, []);
 
+  const beginResize = useCallback((e: React.PointerEvent, id: string) => {
+    e.stopPropagation();
+    const item = layout.find((p) => p.id === id);
+    if (!item || !canvasRef.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const currentScale = item.scale ?? 1.0;
+    const centerX = item.x + rect.left;
+    const centerY = item.y + rect.top;
+    const startDistance = Math.sqrt(
+      Math.pow(e.clientX - centerX, 2) + Math.pow(e.clientY - centerY, 2)
+    );
+    resizeStateRef.current = {
+      id,
+      startScale: currentScale,
+      startDistance: startDistance || 1, // Avoid division by zero
+    };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }, [layout]);
+
+  const onResizeMove = useCallback((e: React.PointerEvent) => {
+    const resizeState = resizeStateRef.current;
+    if (!resizeState || !canvasRef.current) return;
+    
+    const rect = canvasRef.current.getBoundingClientRect();
+    const item = layout.find((p) => p.id === resizeState.id);
+    if (!item) return;
+
+    const centerX = item.x + rect.left;
+    const centerY = item.y + rect.top;
+    const currentDistance = Math.sqrt(
+      Math.pow(e.clientX - centerX, 2) + Math.pow(e.clientY - centerY, 2)
+    );
+
+    // Safety checks to prevent division by zero and invalid values
+    if (!Number.isFinite(currentDistance) || currentDistance <= 0) return;
+    if (!Number.isFinite(resizeState.startDistance) || resizeState.startDistance <= 0) return;
+
+    const scaleDelta = currentDistance / resizeState.startDistance;
+    if (!Number.isFinite(scaleDelta)) return;
+
+    const newScale = Math.max(0.5, Math.min(2.0, resizeState.startScale * scaleDelta));
+    
+    if (!Number.isFinite(newScale)) return;
+    
+    setLayout((prev) =>
+      prev.map((p) => (p.id === resizeState.id ? { ...p, scale: newScale, zIndex: Date.now() } : p)),
+    );
+  }, [layout, setLayout]);
+
+  const endResize = useCallback(() => {
+    const resizing = resizeStateRef.current;
+    resizeStateRef.current = null;
+    if (!resizing) return;
+    const item = layout.find((p) => p.id === resizing.id);
+    if (item) {
+      updatePlacedItemScale({ id: resizing.id, scale: item.scale ?? 1.0 });
+    }
+  }, [layout]);
+
+  const colorPalette = [
+    { name: "Default", value: undefined },
+    { name: "Amber", value: "#fbbf24" },
+    { name: "Cyan", value: "#22d3ee" },
+    { name: "Teal", value: "#14b8a6" },
+    { name: "Pink", value: "#ec4899" },
+    { name: "Magenta", value: "#e879f9" },
+    { name: "Purple", value: "#a855f7" },
+    { name: "Green", value: "#10b981" },
+    { name: "Gold", value: "#fbbf24" },
+    { name: "Coral", value: "#ff6b6b" },
+  ];
+
+  const handleColorChange = useCallback((color: string | undefined) => {
+    if (!selectedPlacedId) return;
+    updatePlacedItemColor({ id: selectedPlacedId, color });
+    // Update layout state immediately for instant feedback
+    setLayout((prev) =>
+      prev.map((item) => (item.id === selectedPlacedId ? { ...item, color, zIndex: Date.now() } : item)),
+    );
+    // Also refresh from storage to ensure persistence
+    setTimeout(() => {
+      refreshFromStorage();
+    }, 100);
+    setShowColorPicker(null);
+  }, [selectedPlacedId, refreshFromStorage, setLayout]);
+
   const totals = useMemo(() => {
     const owned = Object.values(inventory).reduce((a, b) => a + b, 0);
     return { owned, placed: layout.length };
@@ -245,10 +371,10 @@ export function AbyssalGardenPanel({ open, onClose }: Props) {
         {/* Body */}
         <div className="grid flex-1 grid-cols-1 gap-4 p-4 md:grid-cols-[360px_1fr]">
           {/* Left rail: shop + inventory */}
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 overflow-hidden">
             {/* Shop */}
-            <div className="rounded-3xl border border-cyan-300/12 bg-slate-950/30 p-4 shadow-[0_0_18px_rgba(34,211,238,0.12)]">
-              <div className="mb-3 flex items-center justify-between">
+            <div className="flex flex-col rounded-3xl border border-cyan-300/12 bg-slate-950/30 shadow-[0_0_18px_rgba(34,211,238,0.12)] overflow-hidden">
+              <div className="flex-shrink-0 px-4 pt-4 pb-3 flex items-center justify-between border-b border-cyan-300/10">
                 <div className="flex items-center gap-2 text-xs tracking-widest text-cyan-100/70">
                   <ShoppingBag className="h-4 w-4 text-cyan-200/70" />
                   SHOP
@@ -256,7 +382,7 @@ export function AbyssalGardenPanel({ open, onClose }: Props) {
                 <div className="text-[11px] text-cyan-100/45">Costs are in Abyssal Currency</div>
               </div>
 
-              <div className="space-y-2">
+              <div className="flex-1 overflow-y-auto px-4 pb-4 pt-3 space-y-2 max-h-[400px]">
                 {ABYSSAL_ITEMS.map((it) => {
                   const isUnlocked = unlocked.has(it.id);
                   const canAfford = currency >= it.cost;
@@ -305,9 +431,9 @@ export function AbyssalGardenPanel({ open, onClose }: Props) {
             </div>
 
             {/* Inventory */}
-            <div className="rounded-3xl border border-cyan-300/12 bg-slate-950/30 p-4 shadow-[0_0_18px_rgba(34,211,238,0.12)]">
-              <div className="mb-3 text-xs tracking-widest text-cyan-100/70">INVENTORY</div>
-              <div className="space-y-2">
+            <div className="flex flex-col rounded-3xl border border-cyan-300/12 bg-slate-950/30 shadow-[0_0_18px_rgba(34,211,238,0.12)] overflow-hidden">
+              <div className="flex-shrink-0 px-4 pt-4 pb-3 text-xs tracking-widest text-cyan-100/70 border-b border-cyan-300/10">INVENTORY</div>
+              <div className="flex-1 overflow-y-auto px-4 pb-4 pt-3 space-y-2 max-h-[400px]">
                 {ABYSSAL_ITEMS.map((it) => {
                   const qty = inventory[it.id] ?? 0;
                   return (
@@ -349,7 +475,7 @@ export function AbyssalGardenPanel({ open, onClose }: Props) {
             <div className="pointer-events-none absolute inset-0 abyssal-seabed" />
 
             <div className="pointer-events-none absolute left-4 top-4 rounded-full border border-cyan-300/12 bg-slate-950/35 px-3 py-1 text-xs text-cyan-100/65">
-              Drag inventory icons here • Drag placed items to move • Click a placed item to remove
+              Drag inventory icons here • Drag placed items to move • Click to select • Resize handles • Color picker
             </div>
 
             <div
@@ -358,11 +484,33 @@ export function AbyssalGardenPanel({ open, onClose }: Props) {
               // Use capture so drops still work even if the cursor is over a placed item.
               onDragOverCapture={onCanvasDragOver}
               onDropCapture={onCanvasDrop}
-              onPointerMove={onCanvasPointerMove}
-              onPointerUp={endMovePlaced}
-              onPointerCancel={endMovePlaced}
-              onPointerLeave={endMovePlaced}
-              onPointerDown={() => setSelectedPlacedId(null)}
+              onPointerMove={(e) => {
+                if (resizeStateRef.current) {
+                  onResizeMove(e);
+                } else {
+                  onCanvasPointerMove(e);
+                }
+              }}
+              onPointerUp={(e) => {
+                endMovePlaced();
+                endResize();
+              }}
+              onPointerCancel={(e) => {
+                endMovePlaced();
+                endResize();
+              }}
+              onPointerLeave={(e) => {
+                endMovePlaced();
+                endResize();
+              }}
+              onPointerDown={(e) => {
+                // Only close if clicking directly on canvas, not on controls or color picker
+                const target = e.target as HTMLElement;
+                if (!target.closest(".item-controls") && !target.closest(".resize-handle") && !showColorPicker) {
+                  setSelectedPlacedId(null);
+                  setShowColorPicker(null);
+                }
+              }}
             >
               {layout
                 .slice()
@@ -379,30 +527,116 @@ export function AbyssalGardenPanel({ open, onClose }: Props) {
                       style={{
                         left: p.x,
                         top: p.y,
-                        transform: "translate(-50%, -50%)",
+                        transform: `translate(-50%, -50%) scale(${p.scale ?? 1.0})`,
                         zIndex: p.zIndex ?? 0,
+                        ...(p.color ? {
+                          filter: `drop-shadow(0 0 12px ${p.color}AA) drop-shadow(0 0 6px ${p.color}88)`,
+                        } : {}),
                       }}
-                      onPointerDown={(e) => beginMovePlaced(e, p.id)}
+                      onPointerDown={(e) => {
+                        const target = e.target as HTMLElement;
+                        if (target.classList.contains("resize-handle") || target.closest(".resize-handle")) {
+                          beginResize(e, p.id);
+                        } else if (!target.closest(".item-controls")) {
+                          beginMovePlaced(e, p.id);
+                        }
+                      }}
                       onPointerUp={endMovePlaced}
                       onPointerCancel={endMovePlaced}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelectedPlacedId(p.id);
+                        if (!(e.target as HTMLElement).classList.contains("resize-handle") &&
+                            !(e.target as HTMLElement).closest(".item-controls")) {
+                          setSelectedPlacedId(p.id);
+                          // Close color picker if selecting a different item
+                          if (showColorPicker !== null && showColorPicker !== p.id) {
+                            setShowColorPicker(null);
+                          }
+                        }
                       }}
                     >
-                      <div className={`${itemArtClass(p.itemId)} abyssal-placed`} aria-hidden="true" />
+                      <div 
+                        className={`${itemArtClass(p.itemId)} abyssal-placed`} 
+                        aria-hidden="true"
+                        style={{
+                          ...(p.color ? {
+                            '--custom-color': p.color,
+                            backgroundColor: `${p.color}22`,
+                            borderColor: `${p.color}50`,
+                            boxShadow: `
+                              0 0 28px ${p.color}77,
+                              0 0 16px ${p.color}55,
+                              inset 0 0 20px ${p.color}44,
+                              inset 0 0 35px ${p.color}33
+                            `,
+                          } as React.CSSProperties & { '--custom-color'?: string } : {}),
+                        }}
+                      />
                       {isSelected ? (
-                        <button
-                          className="absolute -right-2 -top-2 rounded-full border border-rose-300/20 bg-rose-500/20 p-1 text-rose-50 shadow-[0_0_12px_rgba(244,63,94,0.22)] hover:bg-rose-500/30"
-                          title="Remove (returns to inventory)"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removePlacedItem(p.id);
-                            setSelectedPlacedId(null);
-                          }}
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
+                        <>
+                          {/* Resize handles */}
+                          <div
+                            className="resize-handle absolute -right-1 -top-1 h-4 w-4 cursor-nwse-resize rounded-full border-2 border-cyan-300/40 bg-cyan-400/20 hover:bg-cyan-400/30 z-10"
+                            onPointerDown={(e) => beginResize(e, p.id)}
+                            title="Resize (drag outward)"
+                          />
+                          <div
+                            className="resize-handle absolute -left-1 -bottom-1 h-4 w-4 cursor-nwse-resize rounded-full border-2 border-cyan-300/40 bg-cyan-400/20 hover:bg-cyan-400/30 z-10"
+                            onPointerDown={(e) => beginResize(e, p.id)}
+                            title="Resize (drag outward)"
+                          />
+                          {/* Control buttons */}
+                          <div className="item-controls absolute -right-2 top-6 flex flex-col gap-1">
+                            <button
+                              className="rounded-full border border-cyan-300/20 bg-cyan-500/20 p-1.5 text-cyan-50 shadow-[0_0_12px_rgba(34,211,238,0.22)] hover:bg-cyan-500/30"
+                              title="Change color"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                const newValue = showColorPicker === p.id ? null : p.id;
+                                setShowColorPicker(newValue);
+                              }}
+                            >
+                              <Palette className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              className="rounded-full border border-rose-300/20 bg-rose-500/20 p-1.5 text-rose-50 shadow-[0_0_12px_rgba(244,63,94,0.22)] hover:bg-rose-500/30"
+                              title="Remove (returns to inventory)"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removePlacedItem(p.id);
+                                setSelectedPlacedId(null);
+                                setShowColorPicker(null);
+                              }}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                          {/* Color picker */}
+                          {showColorPicker === p.id && (
+                            <div 
+                              className="item-controls absolute -right-2 top-20 z-[100] flex flex-col gap-1 rounded-2xl border border-cyan-300/20 bg-slate-950/90 p-2 shadow-[0_0_22px_rgba(34,211,238,0.25)] backdrop-blur-md"
+                              onClick={(e) => e.stopPropagation()}
+                              onPointerDown={(e) => e.stopPropagation()}
+                            >
+                              {colorPalette.map((color) => (
+                                <button
+                                  key={color.name}
+                                  className="h-8 w-8 rounded-full border border-cyan-300/20 transition-all hover:scale-110"
+                                  style={{
+                                    backgroundColor: color.value || "transparent",
+                                    borderColor: color.value || "rgba(34, 211, 238, 0.3)",
+                                  }}
+                                  title={color.name}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleColorChange(color.value);
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </>
                       ) : null}
                     </div>
                   );

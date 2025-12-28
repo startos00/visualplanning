@@ -14,9 +14,23 @@ const GARDEN_STATE_ID = "main";
 
 const defaultInventory: AbyssalInventory = {
   "abyssal-rock": 0,
+  "seaweed": 0,
+  "bubble": 0,
+  "small-coral": 0,
+  "shrimp": 0,
+  "plankton": 0,
+  "starfish": 0,
+  "sea-flowers": 0,
   "neon-sandcastle": 0,
+  "big-coral": 0,
+  "dumbo-octopus": 0,
   "crystalline-spire": 0,
+  "turtle": 0,
+  "shellfish": 0,
+  "michelangelos-david": 0,
+  "roman-ruin": 0,
   "sirens-tail": 0,
+  "whales": 0,
   "lost-bounty": 0,
 };
 

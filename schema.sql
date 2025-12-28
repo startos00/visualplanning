@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS abyssal_garden_states (
   user_id TEXT NOT NULL,
   swallowed_count INTEGER NOT NULL DEFAULT 0,
   abyssal_currency INTEGER NOT NULL DEFAULT 0,
-  inventory JSONB NOT NULL DEFAULT '{"abyssal-rock":0,"neon-sandcastle":0,"crystalline-spire":0,"sirens-tail":0,"lost-bounty":0}'::jsonb,
+  inventory JSONB NOT NULL DEFAULT '{"abyssal-rock":0,"seaweed":0,"bubble":0,"small-coral":0,"shrimp":0,"plankton":0,"starfish":0,"sea-flowers":0,"neon-sandcastle":0,"big-coral":0,"dumbo-octopus":0,"crystalline-spire":0,"turtle":0,"shellfish":0,"michelangelos-david":0,"roman-ruin":0,"sirens-tail":0,"whales":0,"lost-bounty":0}'::jsonb,
   garden_layout JSONB NOT NULL DEFAULT '[]'::jsonb,
   awarded_tasks JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),

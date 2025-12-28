@@ -23,9 +23,23 @@ let loadPromise: Promise<void> | null = null;
 
 const defaultInventory: AbyssalInventory = {
   "abyssal-rock": 0,
+  "seaweed": 0,
+  "bubble": 0,
+  "small-coral": 0,
+  "shrimp": 0,
+  "plankton": 0,
+  "starfish": 0,
+  "sea-flowers": 0,
   "neon-sandcastle": 0,
+  "big-coral": 0,
+  "dumbo-octopus": 0,
   "crystalline-spire": 0,
+  "turtle": 0,
+  "shellfish": 0,
+  "michelangelos-david": 0,
+  "roman-ruin": 0,
   "sirens-tail": 0,
+  "whales": 0,
   "lost-bounty": 0,
 };
 
@@ -149,9 +163,23 @@ export function loadInventory(): AbyssalInventory {
 export async function saveInventory(inv: AbyssalInventory): Promise<void> {
   const clean: AbyssalInventory = {
     "abyssal-rock": Math.max(0, Math.floor(inv["abyssal-rock"] ?? 0)),
+    "seaweed": Math.max(0, Math.floor(inv["seaweed"] ?? 0)),
+    "bubble": Math.max(0, Math.floor(inv["bubble"] ?? 0)),
+    "small-coral": Math.max(0, Math.floor(inv["small-coral"] ?? 0)),
+    "shrimp": Math.max(0, Math.floor(inv["shrimp"] ?? 0)),
+    "plankton": Math.max(0, Math.floor(inv["plankton"] ?? 0)),
+    "starfish": Math.max(0, Math.floor(inv["starfish"] ?? 0)),
+    "sea-flowers": Math.max(0, Math.floor(inv["sea-flowers"] ?? 0)),
     "neon-sandcastle": Math.max(0, Math.floor(inv["neon-sandcastle"] ?? 0)),
+    "big-coral": Math.max(0, Math.floor(inv["big-coral"] ?? 0)),
+    "dumbo-octopus": Math.max(0, Math.floor(inv["dumbo-octopus"] ?? 0)),
     "crystalline-spire": Math.max(0, Math.floor(inv["crystalline-spire"] ?? 0)),
+    "turtle": Math.max(0, Math.floor(inv["turtle"] ?? 0)),
+    "shellfish": Math.max(0, Math.floor(inv["shellfish"] ?? 0)),
+    "michelangelos-david": Math.max(0, Math.floor(inv["michelangelos-david"] ?? 0)),
+    "roman-ruin": Math.max(0, Math.floor(inv["roman-ruin"] ?? 0)),
     "sirens-tail": Math.max(0, Math.floor(inv["sirens-tail"] ?? 0)),
+    "whales": Math.max(0, Math.floor(inv["whales"] ?? 0)),
     "lost-bounty": Math.max(0, Math.floor(inv["lost-bounty"] ?? 0)),
   };
   await updateField("inventory", clean);

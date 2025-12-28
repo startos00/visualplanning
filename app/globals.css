@@ -106,7 +106,8 @@ body {
   .animate-ink-squid,
   .submerge-overlay,
   .animate-rapid-bubble,
-  .animate-surface-fade {
+  .animate-surface-fade,
+  .abyssal-tail {
     animation: none !important;
     transition: none !important;
   }
@@ -472,13 +473,24 @@ input:-webkit-autofill:active {
   height: 84px;
 }
 
-/* Individual silhouettes (simple, premium-glass-ish) */
+/* Individual silhouettes with realistic forms and subtle neon glows */
+
+/* Abyssal Rock: Abstract, minimal sculptural form with subtle ambient glow */
 .abyssal-rock {
   border-radius: 44% 56% 54% 46% / 55% 45% 55% 45%;
+  background: radial-gradient(circle at 40% 30%, rgba(255, 255, 255, 0.15), rgba(34, 211, 238, 0.08) 60%);
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.08), inset 0 0 8px rgba(255, 255, 255, 0.04);
 }
 
+/* Neon Sandcastle: Realistic sandcastle form with warm golden/amber neon glow */
 .abyssal-sandcastle {
   border-radius: 22px;
+  background: radial-gradient(circle at 30% 25%, rgba(255, 193, 7, 0.18), rgba(255, 152, 0, 0.12) 50%, rgba(255, 193, 7, 0.06) 80%),
+    linear-gradient(135deg, rgba(255, 193, 7, 0.15), rgba(255, 152, 0, 0.10) 55%);
+  border: 1px solid rgba(255, 193, 7, 0.20);
+  box-shadow: 0 0 20px rgba(255, 193, 7, 0.15), inset 0 0 16px rgba(255, 255, 255, 0.08);
+  /* Create turret-like structure with pseudo-elements */
+  position: relative;
 }
 
 .abyssal-sandcastle::before {
@@ -486,23 +498,109 @@ input:-webkit-autofill:active {
   position: absolute;
   inset: 14px 18px 20px 18px;
   border-radius: 18px;
-  border: 1px solid rgba(34, 211, 238, 0.16);
-  background: radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.14), transparent 55%);
-  box-shadow: inset 0 0 12px rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 193, 7, 0.18);
+  background: radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.16), transparent 55%);
+  box-shadow: inset 0 0 14px rgba(255, 193, 7, 0.08), 0 0 8px rgba(255, 193, 7, 0.06);
+  /* Create crenellations effect */
+  clip-path: polygon(0% 0%, 25% 0%, 30% -10%, 35% 0%, 65% 0%, 70% -10%, 75% 0%, 100% 0%, 100% 100%, 0% 100%);
 }
 
+/* Crystalline Spire: Glass-like tower with cool cyan/teal neon accents */
 .abyssal-spire {
   border-radius: 28px;
   clip-path: polygon(50% 2%, 76% 18%, 90% 46%, 75% 84%, 50% 98%, 24% 84%, 10% 46%, 24% 18%);
+  background: linear-gradient(180deg, 
+    rgba(34, 211, 238, 0.25) 0%, 
+    rgba(20, 184, 166, 0.20) 30%,
+    rgba(34, 211, 238, 0.15) 60%,
+    rgba(20, 184, 166, 0.12) 100%);
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  box-shadow: 
+    0 0 24px rgba(34, 211, 238, 0.18),
+    0 0 12px rgba(20, 184, 166, 0.12),
+    inset 0 0 20px rgba(255, 255, 255, 0.10),
+    inset 0 0 40px rgba(34, 211, 238, 0.08);
+  position: relative;
 }
 
+.abyssal-spire::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: 
+    linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.15) 50%, transparent 100%),
+    radial-gradient(ellipse at 50% 20%, rgba(255, 255, 255, 0.20), transparent 60%);
+  pointer-events: none;
+  border-radius: inherit;
+  clip-path: inherit;
+}
+
+/* Siren's Tail: Mermaid tail with coral/pink/magenta neon glow that pulses subtly */
 .abyssal-tail {
   border-radius: 40px;
   clip-path: polygon(50% 0%, 65% 10%, 78% 30%, 70% 50%, 80% 70%, 55% 100%, 50% 88%, 45% 100%, 20% 70%, 30% 50%, 22% 30%, 35% 10%);
+  background: radial-gradient(ellipse at 50% 40%,
+    rgba(255, 105, 180, 0.22) 0%,
+    rgba(236, 72, 153, 0.18) 30%,
+    rgba(255, 20, 147, 0.14) 60%,
+    rgba(236, 72, 153, 0.10) 100%);
+  border: 1px solid rgba(255, 105, 180, 0.24);
+  box-shadow: 
+    0 0 22px rgba(255, 105, 180, 0.16),
+    0 0 12px rgba(236, 72, 153, 0.12),
+    inset 0 0 18px rgba(255, 255, 255, 0.08);
+  position: relative;
+  animation: tailPulse 4s ease-in-out infinite;
 }
 
+@keyframes tailPulse {
+  0%, 100% {
+    box-shadow: 
+      0 0 22px rgba(255, 105, 180, 0.16),
+      0 0 12px rgba(236, 72, 153, 0.12),
+      inset 0 0 18px rgba(255, 255, 255, 0.08);
+    opacity: 1;
+  }
+  50% {
+    box-shadow: 
+      0 0 28px rgba(255, 105, 180, 0.20),
+      0 0 16px rgba(236, 72, 153, 0.16),
+      inset 0 0 22px rgba(255, 255, 255, 0.10);
+    opacity: 0.95;
+  }
+}
+
+.abyssal-tail::before {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  background: radial-gradient(ellipse at 50% 50%, 
+    rgba(255, 255, 255, 0.12) 0%,
+    transparent 50%);
+  border-radius: inherit;
+  clip-path: inherit;
+  pointer-events: none;
+  /* Create scale-like pattern through light variations */
+  background-image: 
+    repeating-linear-gradient(45deg, transparent 0px, rgba(255, 255, 255, 0.06) 2px, transparent 4px),
+    repeating-linear-gradient(-45deg, transparent 0px, rgba(255, 255, 255, 0.04) 2px, transparent 4px);
+}
+
+/* The Lost Bounty: Treasure chest with warm gold/amber neon glow */
 .abyssal-bounty {
   border-radius: 18px;
+  background: radial-gradient(circle at 50% 40%,
+    rgba(255, 193, 7, 0.20) 0%,
+    rgba(255, 152, 0, 0.16) 40%,
+    rgba(255, 193, 7, 0.12) 70%,
+    rgba(255, 152, 0, 0.08) 100%);
+  border: 1px solid rgba(255, 193, 7, 0.22);
+  box-shadow: 
+    0 0 24px rgba(255, 193, 7, 0.18),
+    0 0 12px rgba(255, 152, 0, 0.12),
+    inset 0 0 20px rgba(255, 255, 255, 0.10),
+    inset 0 0 40px rgba(255, 193, 7, 0.08);
+  position: relative;
 }
 
 .abyssal-bounty::before {
@@ -513,6 +611,596 @@ input:-webkit-autofill:active {
   top: 12px;
   height: 18px;
   border-radius: 14px;
-  border: 1px solid rgba(16, 185, 129, 0.18);
-  background: linear-gradient(90deg, rgba(16, 185, 129, 0.10), rgba(34, 211, 238, 0.08));
+  border: 1px solid rgba(255, 193, 7, 0.20);
+  background: linear-gradient(90deg, 
+    rgba(255, 193, 7, 0.15) 0%,
+    rgba(255, 255, 255, 0.12) 30%,
+    rgba(255, 193, 7, 0.12) 70%,
+    rgba(255, 152, 0, 0.10) 100%);
+  box-shadow: 
+    inset 0 0 10px rgba(255, 193, 7, 0.10),
+    0 0 8px rgba(255, 193, 7, 0.08);
+  /* Suggest lock mechanism */
+}
+
+.abyssal-bounty::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: 
+    radial-gradient(ellipse at 50% 30%, rgba(255, 255, 255, 0.15), transparent 50%),
+    linear-gradient(180deg, transparent 0%, rgba(255, 193, 7, 0.08) 50%, transparent 100%);
+  border-radius: inherit;
+  pointer-events: none;
+  /* Suggest treasure glowing within */
+}
+
+/* Custom scrollbar styling for Abyssal Garden */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 8px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.3);
+  border-radius: 4px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: rgba(34, 211, 238, 0.3);
+  border-radius: 4px;
+  border: 1px solid rgba(34, 211, 238, 0.1);
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: rgba(34, 211, 238, 0.5);
+}
+
+/* Seaweed: Flowing, organic form with subtle green/cyan neon glow */
+.abyssal-seaweed {
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  clip-path: polygon(50% 0%, 55% 20%, 50% 40%, 45% 60%, 50% 80%, 55% 100%, 45% 100%, 50% 80%, 45% 60%, 50% 40%, 45% 20%);
+  background: radial-gradient(ellipse at 50% 50%,
+    rgba(16, 185, 129, 0.18) 0%,
+    rgba(34, 211, 238, 0.14) 40%,
+    rgba(16, 185, 129, 0.10) 80%);
+  border: 1px solid rgba(16, 185, 129, 0.20);
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.12), inset 0 0 12px rgba(34, 211, 238, 0.08);
+  position: relative;
+  animation: seaweedSway 6s ease-in-out infinite;
+}
+
+@keyframes seaweedSway {
+  0%, 100% { transform: rotate(-2deg); }
+  50% { transform: rotate(2deg); }
+}
+
+/* Bubble: Spherical form with translucent appearance and cyan/white neon rim */
+.abyssal-bubble {
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%,
+    rgba(255, 255, 255, 0.25) 0%,
+    rgba(34, 211, 238, 0.15) 40%,
+    transparent 70%);
+  border: 1px solid rgba(34, 211, 238, 0.30);
+  box-shadow: 
+    0 0 20px rgba(34, 211, 238, 0.20),
+    inset 0 0 15px rgba(255, 255, 255, 0.15),
+    inset -10px -10px 20px rgba(34, 211, 238, 0.10);
+  position: relative;
+  animation: bubbleFloat 4s ease-in-out infinite;
+}
+
+@keyframes bubbleFloat {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+
+.abyssal-bubble::before {
+  content: "";
+  position: absolute;
+  inset: 20%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.30), transparent 60%);
+  pointer-events: none;
+}
+
+/* Small Coral: Compact coral formation with warm pink/coral neon glow */
+.abyssal-small-coral {
+  border-radius: 40% 60% 50% 50% / 50% 50% 60% 40%;
+  clip-path: polygon(50% 0%, 60% 15%, 70% 30%, 65% 50%, 70% 70%, 50% 100%, 30% 70%, 35% 50%, 30% 30%, 40% 15%);
+  background: radial-gradient(circle at 50% 50%,
+    rgba(255, 105, 180, 0.20) 0%,
+    rgba(255, 20, 147, 0.16) 50%,
+    rgba(255, 105, 180, 0.12) 80%);
+  border: 1px solid rgba(255, 105, 180, 0.22);
+  box-shadow: 0 0 18px rgba(255, 105, 180, 0.15), inset 0 0 14px rgba(255, 255, 255, 0.08);
+}
+
+/* Shrimp: Ultra-delicate bioluminescent shrimp - very slender curved form */
+.abyssal-shrimp {
+  border-radius: 2px;
+  /* Extremely slender silhouette to avoid "slug" look - Rostrum, long body, thin tail */
+  /* Balanced around 50% center to ensure correct placement on canvas */
+  clip-path: polygon(
+    /* Rostrum (Pointed front) */
+    5% 48%, 15% 50%, 20% 52%,
+    /* Top of body - very thin cephalothorax */
+    30% 48%, 45% 46%,
+    /* Abdomen (Top curve) - Slender curve */
+    60% 48%, 75% 54%, 90% 65%,
+    /* Tail Fan - Graceful profile */
+    95% 62%, 100% 60%, 98% 72%, 92% 70%,
+    /* Abdomen (Bottom curve) - Matching top for thinness */
+    82% 72%, 68% 64%, 55% 58%,
+    /* Bottom of cephalothorax - narrowing to head */
+    40% 58%, 25% 60%, 15% 55%
+  );
+  background: 
+    /* Internal bioluminescent heart */
+    radial-gradient(circle at 22% 52%, rgba(255, 255, 255, 0.5) 0%, transparent 40%),
+    /* Main translucent body volume */
+    radial-gradient(ellipse 80% 30% at 40% 55%,
+      rgba(255, 152, 0, 0.25) 0%,
+      rgba(255, 105, 180, 0.15) 40%,
+      transparent 80%),
+    /* Base translucent material */
+    linear-gradient(180deg, rgba(255, 152, 0, 0.1) 0%, rgba(15, 23, 42, 0.5) 100%);
+  border: 0.5px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 
+    0 0 30px rgba(255, 152, 0, 0.2),
+    inset 0 0 20px rgba(255, 255, 255, 0.05);
+  position: relative;
+  /* Use separate properties to avoid overriding parent translate if any, 
+     though parent is a separate div. Origin center for balance. */
+  rotate: 2deg;
+  scale: 1;
+  animation: shrimpSlenderSwim 8s ease-in-out infinite;
+  transform-origin: center center;
+  will-change: rotate, scale, filter;
+}
+
+@keyframes shrimpSlenderSwim {
+  0%, 100% { 
+    rotate: 2deg; 
+    scale: 1; 
+    filter: brightness(1) drop-shadow(0 0 5px rgba(255, 152, 0, 0.2));
+  }
+  50% { 
+    rotate: -2deg; 
+    scale: 1.02; 
+    filter: brightness(1.2) drop-shadow(0 0 15px rgba(255, 152, 0, 0.4));
+  }
+}
+
+.abyssal-shrimp::before {
+  content: "";
+  position: absolute;
+  /* Extremely long whip-like antennae */
+  top: 50%;
+  left: -35%;
+  width: 55%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4) 85%);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+  transform-origin: right center;
+  animation: antennaeFlutter 3s ease-in-out infinite;
+}
+
+@keyframes antennaeFlutter {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
+}
+
+.abyssal-shrimp::after {
+  content: "";
+  position: absolute;
+  /* Multiple delicate segmented legs */
+  bottom: 12%;
+  left: 20%;
+  width: 45%;
+  height: 20%;
+  background: rgba(255, 255, 255, 0.12);
+  clip-path: polygon(
+    0% 0%, 8% 85%, 12% 0%, 22% 95%, 28% 0%, 42% 90%, 48% 0%, 62% 98%, 68% 0%, 100% 0%
+  );
+  opacity: 0.6;
+}
+
+/* Plankton: Tiny organic forms with blue/cyan neon glow, twinkling effect */
+.abyssal-plankton {
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%,
+    rgba(34, 211, 238, 0.22) 0%,
+    rgba(20, 184, 166, 0.16) 50%,
+    transparent 80%);
+  border: 1px solid rgba(34, 211, 238, 0.25);
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.18);
+  position: relative;
+  animation: planktonTwinkle 3s ease-in-out infinite;
+}
+
+@keyframes planktonTwinkle {
+  0%, 100% { opacity: 0.8; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+/* Starfish: Five-armed form with pink/orange/amber neon glow */
+.abyssal-starfish {
+  border-radius: 50%;
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+  background: radial-gradient(circle at 50% 50%,
+    rgba(255, 152, 0, 0.20) 0%,
+    rgba(255, 105, 180, 0.16) 40%,
+    rgba(255, 193, 7, 0.12) 80%);
+  border: 1px solid rgba(255, 152, 0, 0.22);
+  box-shadow: 0 0 20px rgba(255, 152, 0, 0.15), inset 0 0 16px rgba(255, 105, 180, 0.10);
+}
+
+/* Sea Flowers: Delicate underwater flower forms with pink/purple/cyan neon glow */
+.abyssal-sea-flowers {
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  clip-path: polygon(50% 0%, 60% 20%, 70% 30%, 60% 50%, 50% 60%, 40% 50%, 30% 30%, 40% 20%);
+  background: radial-gradient(circle at 50% 50%,
+    rgba(236, 72, 153, 0.20) 0%,
+    rgba(139, 92, 246, 0.16) 40%,
+    rgba(34, 211, 238, 0.12) 80%);
+  border: 1px solid rgba(236, 72, 153, 0.22);
+  box-shadow: 0 0 18px rgba(236, 72, 153, 0.15), inset 0 0 14px rgba(139, 92, 246, 0.10);
+}
+
+/* Big Coral: Large coral formation with extensive branching */
+.abyssal-big-coral {
+  border-radius: 35% 65% 45% 55% / 55% 45% 65% 35%;
+  clip-path: polygon(50% 0%, 65% 10%, 80% 25%, 75% 45%, 85% 65%, 70% 85%, 50% 100%, 30% 85%, 15% 65%, 25% 45%, 20% 25%, 35% 10%);
+  background: radial-gradient(circle at 50% 50%,
+    rgba(255, 105, 180, 0.22) 0%,
+    rgba(255, 20, 147, 0.18) 40%,
+    rgba(255, 105, 180, 0.14) 80%);
+  border: 1px solid rgba(255, 105, 180, 0.24);
+  box-shadow: 0 0 22px rgba(255, 105, 180, 0.18), inset 0 0 18px rgba(255, 255, 255, 0.10);
+}
+
+/* Dumbo Octopus: Octopus form with distinctive ear-like fins, purple/pink/cyan neon glow */
+.abyssal-dumbo-octopus {
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  clip-path: polygon(50% 0%, 60% 15%, 70% 30%, 65% 50%, 70% 70%, 50% 85%, 30% 70%, 35% 50%, 30% 30%, 40% 15%);
+  background: radial-gradient(ellipse at 50% 40%,
+    rgba(139, 92, 246, 0.22) 0%,
+    rgba(236, 72, 153, 0.18) 30%,
+    rgba(34, 211, 238, 0.14) 60%,
+    rgba(139, 92, 246, 0.10) 100%);
+  border: 1px solid rgba(139, 92, 246, 0.24);
+  box-shadow: 
+    0 0 22px rgba(139, 92, 246, 0.16),
+    0 0 12px rgba(236, 72, 153, 0.12),
+    inset 0 0 18px rgba(255, 255, 255, 0.08);
+  position: relative;
+  animation: octopusPulse 4s ease-in-out infinite;
+}
+
+@keyframes octopusPulse {
+  0%, 100% {
+    box-shadow: 
+      0 0 22px rgba(139, 92, 246, 0.16),
+      0 0 12px rgba(236, 72, 153, 0.12),
+      inset 0 0 18px rgba(255, 255, 255, 0.08);
+  }
+  50% {
+    box-shadow: 
+      0 0 28px rgba(139, 92, 246, 0.20),
+      0 0 16px rgba(236, 72, 153, 0.16),
+      inset 0 0 22px rgba(255, 255, 255, 0.10);
+  }
+}
+
+.abyssal-dumbo-octopus::before {
+  content: "";
+  position: absolute;
+  top: 5%;
+  left: 20%;
+  width: 30%;
+  height: 25%;
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  background: radial-gradient(circle at 50% 50%, rgba(139, 92, 246, 0.25), transparent 70%);
+  clip-path: polygon(0% 0%, 100% 0%, 80% 100%, 20% 100%);
+  pointer-events: none;
+}
+
+.abyssal-dumbo-octopus::after {
+  content: "";
+  position: absolute;
+  top: 5%;
+  right: 20%;
+  width: 30%;
+  height: 25%;
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  background: radial-gradient(circle at 50% 50%, rgba(139, 92, 246, 0.25), transparent 70%);
+  clip-path: polygon(20% 0%, 100% 0%, 80% 100%, 0% 100%);
+  pointer-events: none;
+}
+
+/* Turtle: Sea turtle silhouette with green/cyan neon glow */
+.abyssal-turtle {
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  clip-path: polygon(30% 20%, 70% 20%, 80% 40%, 75% 60%, 80% 80%, 50% 90%, 20% 80%, 25% 60%, 20% 40%);
+  background: radial-gradient(ellipse at 50% 50%,
+    rgba(16, 185, 129, 0.20) 0%,
+    rgba(34, 211, 238, 0.16) 50%,
+    rgba(16, 185, 129, 0.12) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.15), inset 0 0 16px rgba(34, 211, 238, 0.10);
+}
+
+/* Shellfish: Shell/mollusk form with pink/pearl neon glow */
+.abyssal-shellfish {
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  clip-path: polygon(50% 0%, 70% 20%, 80% 50%, 70% 80%, 50% 100%, 30% 80%, 20% 50%, 30% 20%);
+  background: radial-gradient(ellipse at 50% 50%,
+    rgba(255, 105, 180, 0.20) 0%,
+    rgba(255, 255, 255, 0.16) 40%,
+    rgba(255, 105, 180, 0.12) 80%);
+  border: 1px solid rgba(255, 105, 180, 0.22);
+  box-shadow: 
+    0 0 20px rgba(255, 105, 180, 0.15),
+    inset 0 0 16px rgba(255, 255, 255, 0.12),
+    inset 0 0 30px rgba(255, 105, 180, 0.08);
+}
+
+/* Michelangelo's David: Refined high-end glass sculpture with anatomical depth and classic pose */
+.abyssal-david {
+  border-radius: 4px;
+  /* High-fidelity silhouette following the iconic contrapposto proportions - Slender and tall */
+  /* Balanced around 50% horizontally to ensure correct centering on canvas */
+  clip-path: polygon(
+    /* Head & Iconic Curls */
+    48% 0%, 53% 0%, 57% 2%, 58% 8%, 57% 12%, 53% 14%,
+    /* Right Shoulder & Relaxed Arm - Slender profile */
+    58% 18%, 62% 25%, 65% 45%, 62% 65%, 60% 72%,
+    /* Weight-bearing Right Leg (Straight) */
+    58% 75%, 59% 88%, 58% 100%, 50% 100%, 48% 85%, 50% 75%,
+    /* Left Relaxed Leg (Bent) */
+    45% 75%, 42% 85%, 44% 100%, 35% 100%, 36% 85%, 40% 70%,
+    /* Left Torso & Defined Waist */
+    38% 65%, 37% 50%, 38% 42%,
+    /* Left Arm (Raised, holding sling) */
+    35% 38%, 32% 28%, 33% 20%, 38% 16%, 42% 14%,
+    /* Neck back to Face profile */
+    45% 12%, 43% 8%, 43% 4%, 44% 1%
+  );
+  background: 
+    /* Anatomical Highlights - Chest and Abs */
+    radial-gradient(ellipse 30% 15% at 50% 28%, rgba(255, 255, 255, 0.45) 0%, transparent 80%),
+    radial-gradient(ellipse 20% 20% at 48% 45%, rgba(255, 255, 255, 0.3) 0%, transparent 70%),
+    /* Internal lighting refraction */
+    radial-gradient(circle at 45% 25%, rgba(255, 255, 255, 0.4) 0%, transparent 60%),
+    /* Base Material: Bioluminescent Marble/Glass */
+    linear-gradient(180deg,
+      rgba(255, 255, 255, 0.4) 0%,
+      rgba(236, 254, 255, 0.2) 50%,
+      rgba(34, 211, 238, 0.2) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 
+    /* Core Glow */
+    0 0 50px rgba(34, 211, 238, 0.35),
+    0 0 20px rgba(255, 255, 255, 0.3),
+    /* Internal anatomical shadows */
+    inset 0 0 40px rgba(255, 255, 255, 0.25),
+    inset -15px -10px 50px rgba(34, 211, 238, 0.2),
+    inset 15px 10px 50px rgba(0, 0, 0, 0.25);
+  position: relative;
+  /* Use separate properties for animation to avoid overriding parent translate */
+  scale: 1;
+  animation: davidMasterpiece 10s ease-in-out infinite;
+  transform-origin: center center;
+  will-change: scale, filter;
+}
+
+@keyframes davidMasterpiece {
+  0%, 100% { 
+    filter: brightness(1) contrast(1.05) drop-shadow(0 0 15px rgba(34, 211, 238, 0.25));
+    scale: 1;
+  }
+  50% { 
+    filter: brightness(1.2) contrast(1.1) drop-shadow(0 0 30px rgba(34, 211, 238, 0.45));
+    scale: 1.03;
+  }
+}
+
+.abyssal-david::before {
+  content: "";
+  position: absolute;
+  /* Sculpted hair volume and head detail */
+  top: -2%;
+  left: 45%;
+  width: 15%;
+  height: 18%;
+  background: 
+    radial-gradient(circle at 70% 40%, rgba(255, 255, 255, 0.8), transparent 70%),
+    radial-gradient(circle at 30% 60%, rgba(34, 211, 238, 0.5), transparent 60%);
+  border-radius: 40% 60% 40% 40%;
+  filter: blur(1px);
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.abyssal-david::after {
+  content: "";
+  position: absolute;
+  /* Iconic tree stump support - essential for weight and silhouette grounding */
+  bottom: 0%;
+  right: 35%;
+  width: 15%;
+  height: 42%;
+  background: linear-gradient(180deg, 
+    rgba(255, 255, 255, 0.25) 0%, 
+    rgba(34, 211, 238, 0.1) 100%);
+  clip-path: polygon(15% 0%, 85% 10%, 100% 100%, 0% 100%);
+  z-index: -1;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* Roman Ruin: Ancient underwater stone wall - 3D masonry with depth and perspective */
+.abyssal-roman-ruin {
+  border-radius: 2px;
+  /* Perspective silhouette - thick wall view from an angle */
+  clip-path: polygon(
+    /* Front face top edge */
+    0% 40%, 15% 35%, 35% 45%, 55% 30%, 75% 40%, 90% 35%, 100% 40%,
+    /* Right side depth */
+    100% 100%, 0% 100%
+  );
+  background: 
+    /* Block texture depth */
+    repeating-linear-gradient(90deg, 
+      transparent 0px, 
+      transparent 28%, 
+      rgba(0, 0, 0, 0.2) 29%, 
+      transparent 30%
+    ),
+    repeating-linear-gradient(0deg,
+      rgba(255, 255, 255, 0.05) 0%,
+      transparent 2%,
+      transparent 24%,
+      rgba(0, 0, 0, 0.15) 25%
+    ),
+    /* Stone material linear gradient */
+    linear-gradient(180deg,
+      rgba(255, 193, 7, 0.15) 0%,
+      rgba(45, 55, 72, 0.5) 100%);
+  border: 1px solid rgba(255, 193, 7, 0.25);
+  box-shadow: 
+    /* Solid object presence */
+    0 10px 30px rgba(0, 0, 0, 0.3),
+    inset 0 0 20px rgba(255, 255, 255, 0.05),
+    /* Bottom grounding shadow */
+    0 15px 20px -10px rgba(34, 211, 238, 0.1);
+  position: relative;
+  transform-style: preserve-3d;
+}
+
+.abyssal-roman-ruin::before {
+  content: "";
+  position: absolute;
+  /* Top face of the wall stones for 3D depth */
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40%;
+  background: linear-gradient(180deg, 
+    rgba(255, 255, 255, 0.2) 0%, 
+    rgba(255, 193, 7, 0.1) 100%);
+  clip-path: polygon(
+    0% 100%, 15% 87%, 35% 100%, 55% 75%, 75% 100%, 90% 87%, 100% 100%,
+    95% 0%, 80% 10%, 60% 5%, 40% 15%, 20% 5%, 5% 10%
+  );
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.abyssal-roman-ruin::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  /* Vertical masonry cracks for 3D block separation */
+  background-image: 
+    repeating-linear-gradient(90deg,
+      rgba(0, 0, 0, 0.2) 0px,
+      transparent 1px,
+      transparent 32%,
+      rgba(0, 0, 0, 0.15) 33%
+    );
+  background-size: 100% 100%;
+  /* Weathering and bioluminescent sediment */
+  background-color: transparent;
+  mask-image: linear-gradient(to bottom, transparent 40%, black 40%);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Whales: Streamlined Blue Whale profile with ventral pleats and mottled bioluminescence */
+.abyssal-whales {
+  border-radius: 4px;
+  /* Accurate Blue Whale profile: long head, small dorsal fin far back, wide fluke - Slender and proportional */
+  /* Balanced around 50% center to ensure correct placement on canvas */
+  clip-path: polygon(
+    5% 55%, 10% 50%, 20% 46%, 35% 44%, 60% 45%, 80% 46%, 82% 42%, 85% 48%, 92% 52%, 
+    98% 42%, 100% 50%, 98% 62%, 92% 58%, 85% 62%, 75% 75%, 50% 80%, 25% 75%, 10% 65%
+  );
+  background: 
+    /* Mottled skin texture */
+    radial-gradient(circle at 30% 50%, rgba(255, 255, 255, 0.15) 0%, transparent 40%),
+    radial-gradient(circle at 60% 45%, rgba(255, 255, 255, 0.1) 0%, transparent 30%),
+    /* Main organic volume */
+    radial-gradient(ellipse 80% 50% at 40% 55%,
+      rgba(34, 211, 238, 0.3) 0%,
+      rgba(20, 184, 166, 0.2) 40%,
+      rgba(34, 211, 238, 0.1) 70%,
+      transparent 100%),
+    /* Deep water base */
+    linear-gradient(180deg, rgba(34, 211, 238, 0.1) 0%, rgba(15, 23, 42, 0.8) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 
+    0 0 40px rgba(34, 211, 238, 0.2),
+    inset 0 0 30px rgba(255, 255, 255, 0.05);
+  position: relative;
+  /* Use separate properties to avoid overriding parent translate */
+  rotate: 0deg;
+  scale: 1;
+  animation: whaleMajesticDrift 12s ease-in-out infinite;
+  transform-origin: center center;
+  will-change: rotate, scale, filter;
+}
+
+@keyframes whaleMajesticDrift {
+  0%, 100% { 
+    filter: brightness(1) drop-shadow(0 0 15px rgba(34, 211, 238, 0.2));
+    rotate: -1deg;
+    scale: 1;
+  }
+  50% { 
+    filter: brightness(1.2) drop-shadow(0 0 30px rgba(34, 211, 238, 0.4));
+    rotate: 1deg;
+    scale: 1.04;
+  }
+}
+
+.abyssal-whales::before {
+  content: "";
+  position: absolute;
+  /* Massive Blue Whale pectoral fin - slender and positioned forward */
+  top: 60%;
+  left: 15%;
+  width: 25%;
+  height: 12%;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.35) 0%, rgba(34, 211, 238, 0.1) 100%);
+  clip-path: polygon(0% 0%, 100% 20%, 90% 100%, 10% 80%);
+  border-radius: 50% 50% 20% 50%;
+  opacity: 0.7;
+  animation: finGraceful 12s ease-in-out infinite;
+  transform-origin: top left;
+}
+
+@keyframes finGraceful {
+  0%, 100% { transform: rotate(0deg) scaleX(1); }
+  50% { transform: rotate(5deg) scaleX(0.98); }
+}
+
+.abyssal-whales::after {
+  content: "";
+  position: absolute;
+  /* Blue Whale Ventral Pleats (throat grooves) */
+  inset: 0;
+  background: 
+    repeating-linear-gradient(95deg,
+      rgba(255, 255, 255, 0.08) 0px,
+      rgba(255, 255, 255, 0.08) 1px,
+      transparent 2px,
+      transparent 15px
+    ),
+    /* Eye detail */
+    radial-gradient(circle at 12% 54%, rgba(255, 255, 255, 0.8) 0px, rgba(34, 211, 238, 0.4) 2px, transparent 5px);
+  mask-image: linear-gradient(to bottom, transparent 55%, black 90%);
+  opacity: 0.5;
+  pointer-events: none;
 }

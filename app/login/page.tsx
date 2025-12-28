@@ -1,9 +1,12 @@
 import { SignInForm } from "@/app/components/auth/SignInForm";
 import { DeepSeaBackground } from "@/app/components/auth/DeepSeaBackground";
+import { DumboOctopusCornerLogo } from "@/app/components/DumboOctopusCornerLogo";
 
 export default function LoginPage() {
   return (
     <main className="relative min-h-screen w-full flex items-center justify-center p-4 bg-black overflow-hidden">
+      <DumboOctopusCornerLogo corner="top-left" href="/" size={48} inset={16} />
+
       {/* Cinematic Deep Sea Backdrop */}
       <DeepSeaBackground />
 
