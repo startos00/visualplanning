@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ExternalLink, Sparkles, Target, Wrench, X } from "lucide-react";
+import { ExternalLink, Sparkles, Target, Wrench, X, Maximize2 } from "lucide-react";
 import type { NodeProps } from "reactflow";
 import { Handle, Position } from "reactflow";
 import type { GrimpoNodeData, ModeSetting, NodeKind } from "@/app/lib/graph";
 import ReactMarkdown from "react-markdown";
 import { AbyssalCheckbox } from "../components/ui/AbyssalCheckbox";
+import { DumbyReader } from "../components/DumbyReader";
 
 type EffectiveMode = Exclude<ModeSetting, "auto">;
 
@@ -17,6 +18,7 @@ type GlassNodeData = GrimpoNodeData & {
   onUpdate?: (id: string, patch: Partial<GrimpoNodeData>) => void;
   onDelete?: (id: string) => void;
   onTaskDone?: (id: string) => void;
+  onBathysphereMode?: (nodeId: string, enabled: boolean) => void;
 };
 
 // Color palette constants
@@ -597,6 +599,17 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                               <button
                                 type="button"
                                 onClick={() => {
+                                  data.onBathysphereMode?.(id, true);
+                                }}
+                                className="inline-flex items-center gap-1 rounded-full border border-cyan-300/20 bg-cyan-500/10 px-2 py-1 text-xs text-cyan-200 hover:bg-cyan-500/20"
+                                title="Maximize (Bathysphere Mode)"
+                              >
+                                <Maximize2 className="h-3 w-3" />
+                                Maximize
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
                                   if (localPdfPreviewUrl) {
                                     setLocalPdfPreviewUrl((prev) => {
                                       if (prev) URL.revokeObjectURL(prev);
@@ -626,11 +639,11 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                               </button>
                             </div>
                           </div>
-                          <iframe
-                            title="PDF preview"
-                            src={pdfSrc}
-                            className="h-[200px] w-full rounded-xl border border-cyan-300/10 bg-black/20"
-                            loading="lazy"
+                          <DumbyReader
+                            pdfUrl={pdfSrc}
+                            nodeId={id}
+                            nodeTitle={data.title}
+                            viewMode="inline"
                           />
                         </div>
                       ) : null}

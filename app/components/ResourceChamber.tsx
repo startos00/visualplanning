@@ -35,10 +35,15 @@ export function ResourceChamber({ isOpen, onClose, onAddResource }: Props) {
 
   const nodes = getNodes() as GrimpoNode[];
 
-  // Fetch highlights when sidebar opens
+  // Fetch highlights when sidebar opens and refresh periodically
   useEffect(() => {
     if (isOpen) {
       getHighlights().then(setHighlights);
+      // Refresh highlights every 2 seconds when open
+      const interval = setInterval(() => {
+        getHighlights().then(setHighlights);
+      }, 2000);
+      return () => clearInterval(interval);
     }
   }, [isOpen]);
 

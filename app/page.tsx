@@ -31,6 +31,10 @@ import { ResourceChamber } from "@/app/components/ResourceChamber";
 import { awardForTaskCompletionForTaskId } from "@/app/lib/abyssalGarden";
 import { SurfaceButton } from "@/app/components/auth/SurfaceButton";
 import { DecompressionOverlay } from "@/app/components/auth/DecompressionOverlay";
+import { FloatingControlBar } from "@/app/components/FloatingControlBar";
+import { SonarArray } from "@/app/components/SonarArray";
+import { DumbyReader } from "@/app/components/DumbyReader";
+import type { GrimpoNode } from "@/app/lib/graph";
 
 // Define these outside the component to prevent re-creation on every render
 const memoizedNodeTypes = nodeTypes;
@@ -51,6 +55,9 @@ function HomeContent() {
   const [resourceChamberOpen, setResourceChamberOpen] = useState(false);
   const [isSurfacing, setIsSurfacing] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "auth-required">("idle");
+  const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
+  const [sonarArrayOpen, setSonarArrayOpen] = useState(false);
+  const [bathysphereNodeId, setBathysphereNodeId] = useState<string | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -225,11 +232,33 @@ function HomeContent() {
     setOctopusInstances((prev) => prev.filter((id) => id !== octopusId));
   }, []);
 
+  // Track selected nodes from ReactFlow's internal state
+  useEffect(() => {
+    const selected = nodes.filter((n) => n.selected).map((n) => n.id);
+    setSelectedNodeIds(new Set(selected));
+  }, [nodes]);
+
+  // Handle Bathysphere mode
+  const handleBathysphereMode = useCallback((nodeId: string, enabled: boolean) => {
+    setBathysphereNodeId(enabled ? nodeId : null);
+  }, []);
+
+  // Get selected PDF nodes
+  const selectedPdfNodes = useMemo(() => {
+    return nodes.filter(
+      (n) =>
+        selectedNodeIds.has(n.id) &&
+        n.type === "resource" &&
+        n.data.pdfUrl?.trim()
+    ) as GrimpoNode[];
+  }, [nodes, selectedNodeIds]);
+
   // Phase 3: pass zoom + callbacks down to glass nodes (ephemeral, not persisted).
   const viewNodes = useMemo(() => {
     return nodes.map((n) => ({
       ...n,
       hidden: effectiveMode === "strategy" && n.type === "tactical",
+      selected: selectedNodeIds.has(n.id),
       data: {
         ...n.data,
         zoom: viewport.zoom,
@@ -237,9 +266,10 @@ function HomeContent() {
         onUpdate: onUpdateNode,
         onDelete: onDeleteNode,
         onTaskDone: onTaskDone,
+        onBathysphereMode: handleBathysphereMode,
       },
     }));
-  }, [effectiveMode, nodes, onDeleteNode, onTaskDone, onUpdateNode, viewport.zoom]);
+  }, [effectiveMode, nodes, onDeleteNode, onTaskDone, onUpdateNode, viewport.zoom, selectedNodeIds, handleBathysphereMode]);
 
   const defaultEdgeOptions: DefaultEdgeOptions = useMemo(
     () => ({
@@ -305,21 +335,23 @@ function HomeContent() {
     [getViewportCenterFlowPosition, setEdges, setNodes],
   );
 
+  const isBathysphereActive = bathysphereNodeId !== null;
+
   return (
     <div
       ref={wrapperRef}
       className="relative h-screen w-screen bg-gradient-to-b from-slate-950 via-slate-950 to-black"
     >
-      <DumboOctopusCornerLogo corner="top-left" inset={16} size={46} decorative />
+      {!isBathysphereActive && <DumboOctopusCornerLogo corner="top-left" inset={16} size={46} decorative />}
 
       {isSurfacing && <DecompressionOverlay />}
 
       {/* Dumbo Octopus Celebration Animations */}
-      {octopusInstances.map((octopusId) => (
+      {!isBathysphereActive && octopusInstances.map((octopusId) => (
         <DumboOctopus key={octopusId} id={octopusId} onComplete={onOctopusComplete} />
       ))}
 
-      <AbyssalGardenPanel open={abyssalOpen} onClose={() => setAbyssalOpen(false)} />
+      {!isBathysphereActive && <AbyssalGardenPanel open={abyssalOpen} onClose={() => setAbyssalOpen(false)} />}
       <ResourceChamber 
         isOpen={resourceChamberOpen} 
         onClose={() => setResourceChamberOpen(false)} 
@@ -336,35 +368,81 @@ function HomeContent() {
           }));
         }}
       />
-
-      <ReactFlow
-        nodes={viewNodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        nodeTypes={memoizedNodeTypes}
-        edgeTypes={memoizedEdgeTypes}
-        defaultEdgeOptions={defaultEdgeOptions}
-        onMove={onMove}
-        onInit={(instance) => {
-          rfRef.current = instance;
-          if (initialViewportRef.current) {
-            instance.setViewport(initialViewportRef.current, { duration: 0 });
-            setViewport(initialViewportRef.current);
-            initialViewportRef.current = null;
-          }
+      {!isBathysphereActive && (
+        <FloatingControlBar
+          selectedCount={selectedPdfNodes.length}
+          onCompare={() => {
+            if (selectedPdfNodes.length >= 2) {
+              setSonarArrayOpen(true);
+            }
+          }}
+        />
+      )}
+      <SonarArray
+        nodes={selectedPdfNodes}
+        isOpen={sonarArrayOpen}
+        onClose={() => {
+          setSonarArrayOpen(false);
+          setSelectedNodeIds(new Set());
         }}
-        fitView
-        proOptions={{ hideAttribution: true }}
-      >
-        <Background gap={32} size={1} color="rgba(255,255,255,0.04)" />
-        <Controls position="bottom-left" style={{ bottom: 140 }} />
-      </ReactFlow>
+        onHighlight={(nodeId, content, position) => {
+          // TODO: Implement shared intelligence for cross-document highlighting
+          console.log("Highlight from", nodeId, ":", content);
+        }}
+      />
+      {/* Bathysphere Mode Overlay */}
+      {bathysphereNodeId && (() => {
+        const node = nodes.find((n) => n.id === bathysphereNodeId);
+        if (!node || !node.data.pdfUrl?.trim()) return null;
+        return (
+          <DumbyReader
+            pdfUrl={node.data.pdfUrl}
+            nodeId={node.id}
+            nodeTitle={node.data.title}
+            viewMode="bathysphere"
+            onViewModeChange={(mode) => {
+              if (mode === "inline") {
+                setBathysphereNodeId(null);
+              }
+            }}
+          />
+        );
+      })()}
 
-      <TemplateSpawner onSpawnPattern={spawnThinkingPattern} />
+      {!isBathysphereActive && (
+        <>
+          <ReactFlow
+            nodes={viewNodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            nodeTypes={memoizedNodeTypes}
+            edgeTypes={memoizedEdgeTypes}
+            defaultEdgeOptions={defaultEdgeOptions}
+            onMove={onMove}
+            onInit={(instance) => {
+              rfRef.current = instance;
+              if (initialViewportRef.current) {
+                instance.setViewport(initialViewportRef.current, { duration: 0 });
+                setViewport(initialViewportRef.current);
+                initialViewportRef.current = null;
+              }
+            }}
+            fitView
+            proOptions={{ hideAttribution: true }}
+            multiSelectionKeyCode="Shift"
+          >
+            <Background gap={32} size={1} color="rgba(255,255,255,0.04)" />
+            <Controls position="bottom-left" style={{ bottom: 140 }} />
+          </ReactFlow>
+
+          <TemplateSpawner onSpawnPattern={spawnThinkingPattern} />
+        </>
+      )}
 
       {/* Mode toggle overlay */}
+      {!isBathysphereActive && !sonarArrayOpen && (
       <div className="pointer-events-none absolute right-4 top-4 z-50 flex flex-col items-end gap-2">
         <div className="pointer-events-auto flex items-center gap-2">
           <div className="flex items-center rounded-full border border-cyan-300/20 bg-slate-950/40 p-1 backdrop-blur-md shadow-[0_0_18px_rgba(34,211,238,0.18)]">
@@ -400,8 +478,10 @@ function HomeContent() {
           Zoom: {viewport.zoom.toFixed(2)} • Showing: {effectiveMode.toUpperCase()}
         </div>
       </div>
+      )}
 
       {/* Add Node FAB */}
+      {!isBathysphereActive && (
       <div className="pointer-events-none absolute bottom-5 right-5 z-50">
         <div className="pointer-events-auto relative">
           {addOpen ? (
@@ -436,8 +516,10 @@ function HomeContent() {
           </button>
         </div>
       </div>
+      )}
 
       {/* Reset */}
+      {!isBathysphereActive && (
       <div className="pointer-events-none absolute bottom-5 right-24 z-50">
         <button
           className="pointer-events-auto rounded-full border border-cyan-300/20 bg-slate-950/40 px-4 py-2 text-xs text-cyan-50 backdrop-blur-md hover:bg-slate-950/55 disabled:opacity-50"
@@ -457,8 +539,10 @@ function HomeContent() {
           Reset
         </button>
       </div>
+      )}
 
       {/* Surface Button - Positioned under the top-left logo */}
+      {!isBathysphereActive && (
       <div className="pointer-events-none absolute top-[72px] left-[16px] z-50 flex flex-col gap-3">
         <div className="pointer-events-auto">
           <SurfaceButton onSurface={() => setIsSurfacing(true)} disabled={isSurfacing} />
@@ -473,8 +557,10 @@ function HomeContent() {
           </button>
         </div>
       </div>
+      )}
 
       {/* Mascot variants (demo) */}
+      {!isBathysphereActive && (
       <div className="pointer-events-none absolute bottom-5 left-5 z-50">
         <div className="pointer-events-auto rounded-3xl border border-cyan-300/15 bg-slate-950/35 p-3 backdrop-blur-md shadow-[0_0_18px_rgba(34,211,238,0.16)]">
           <div className="mb-2 text-[11px] tracking-widest text-cyan-100/70">MASCOTS</div>
@@ -494,9 +580,10 @@ function HomeContent() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Save status indicator */}
-      {saveStatus !== "idle" && (
+      {!isBathysphereActive && saveStatus !== "idle" && (
         <div className="pointer-events-none absolute bottom-5 left-[200px] z-50">
           {saveStatus === "auth-required" ? (
             <div className="pointer-events-auto rounded-full border border-amber-300/30 bg-amber-500/20 px-4 py-2 text-[11px] text-amber-100 backdrop-blur-md shadow-[0_0_18px_rgba(245,158,11,0.18)]">

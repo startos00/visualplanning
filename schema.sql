@@ -126,3 +126,19 @@ CREATE INDEX IF NOT EXISTS idx_verification_tokens_expires_at ON verification_to
 CREATE INDEX IF NOT EXISTS idx_grimpo_states_user_id ON grimpo_states(user_id);
 CREATE INDEX IF NOT EXISTS idx_pdf_summaries_user_id ON pdf_summaries(user_id);
 
+-- PDF Highlights table
+CREATE TABLE IF NOT EXISTS highlights (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  node_id TEXT NOT NULL,
+  content TEXT NOT NULL,
+  comment TEXT,
+  position JSONB,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, node_id, content)
+);
+
+CREATE INDEX IF NOT EXISTS idx_highlights_user_id ON highlights(user_id);
+CREATE INDEX IF NOT EXISTS idx_highlights_node_id ON highlights(node_id);
+

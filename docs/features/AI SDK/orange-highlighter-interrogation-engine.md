@@ -88,3 +88,4 @@ As a knowledge worker, I want to interactively highlight text in my research doc
 - **Performance**: PDF rendering and highlighting should be smooth even for large documents.
 - **UX**: The transition between the canvas and the reader should feel seamless (e.g., using Framer Motion for the modal).
 
+
