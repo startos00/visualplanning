@@ -101,6 +101,15 @@ body {
   .dumbo-octopus {
     animation: fadeOut 0.5s ease-out forwards !important;
   }
+  .animate-pulse,
+  .animate-bubble,
+  .animate-ink-squid,
+  .submerge-overlay,
+  .animate-rapid-bubble,
+  .animate-surface-fade {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 .octopus-body {
@@ -180,7 +189,255 @@ body {
   transform: rotate(20deg);
 }
 
-/* Abyssal Garden */
+/* Background Drifting Animations */
+@keyframes drift {
+  0%, 100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  25% {
+    transform: translate(20px, -15px) rotate(1deg);
+  }
+  50% {
+    transform: translate(-10px, 25px) rotate(-0.5deg);
+  }
+  75% {
+    transform: translate(-25px, -10px) rotate(0.5deg);
+  }
+}
+
+@keyframes tentacle-drift-1 {
+  0%, 100% { transform: rotate(-35deg) scaleY(1); }
+  50% { transform: rotate(-38deg) scaleY(1.05); }
+}
+@keyframes tentacle-drift-2 {
+  0%, 100% { transform: rotate(-15deg) scaleY(1); }
+  50% { transform: rotate(-18deg) scaleY(1.08); }
+}
+@keyframes tentacle-drift-3 {
+  0%, 100% { transform: rotate(15deg) scaleY(1); }
+  50% { transform: rotate(18deg) scaleY(1.08); }
+}
+@keyframes tentacle-drift-4 {
+  0%, 100% { transform: rotate(35deg) scaleY(1); }
+  50% { transform: rotate(38deg) scaleY(1.05); }
+}
+
+@keyframes marine-snow {
+  0% {
+    transform: translate(0, 0) opacity(0);
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--drift-x), var(--drift-y)) opacity(0);
+  }
+}
+
+.animate-drift {
+  animation: drift 30s ease-in-out infinite;
+}
+
+.animate-tentacle-drift-1 { animation: tentacle-drift-1 12s ease-in-out infinite; }
+.animate-tentacle-drift-2 { animation: tentacle-drift-2 15s ease-in-out infinite; }
+.animate-tentacle-drift-3 { animation: tentacle-drift-3 14s ease-in-out infinite; }
+.animate-tentacle-drift-4 { animation: tentacle-drift-4 13s ease-in-out infinite; }
+
+.animate-marine-snow {
+  animation: marine-snow var(--duration) linear infinite;
+}
+
+@keyframes tentacleWave {
+  0%, 100% { transform: scaleY(1) translateY(0); }
+  50% { transform: scaleY(1.1) translateY(2px); }
+}
+
+@keyframes earFlap {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(-15deg) scale(1.1); }
+}
+
+@keyframes earFlapReverse {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(15deg) scale(1.1); }
+}
+
+@keyframes umbrellaPulse {
+  0%, 100% { transform: scaleX(1); }
+  50% { transform: scaleX(1.4); }
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+@keyframes eyeBlink {
+  0%, 45%, 55%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.1); }
+}
+
+.animate-tentacle-wave {
+  animation: tentacleWave 2s ease-in-out infinite;
+}
+
+.animate-umbrella-pulse {
+  animation: umbrellaPulse 4s ease-in-out infinite;
+}
+
+.animate-twinkle {
+  animation: twinkle var(--duration, 2s) ease-in-out infinite;
+}
+
+.animate-eye-blink {
+  animation: eyeBlink 5s ease-in-out infinite;
+}
+
+.animate-ear-flap {
+  animation: earFlap 3s ease-in-out infinite;
+  transform-origin: right center;
+}
+
+.animate-ear-flap-reverse {
+  animation: earFlapReverse 3s ease-in-out infinite;
+  transform-origin: left center;
+}
+
+@keyframes swimCelebration {
+  0% {
+    transform: translateX(0) translateY(0) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.4;
+  }
+  90% {
+    opacity: 0.4;
+  }
+  100% {
+    transform: translateX(calc(var(--swim-direction) * (100vw + 200px))) translateY(-20px) rotate(calc(var(--swim-direction) * 10deg));
+    opacity: 0;
+  }
+}
+
+.animate-swim-celebration {
+  animation: swimCelebration var(--duration) ease-in-out infinite;
+}
+
+/* Ink Cloud / Password Mask Animations */
+@keyframes inkSquidSwim {
+  0% {
+    transform: translateX(-150%) translateY(0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(250%) translateY(-10px);
+    opacity: 0;
+  }
+}
+
+@keyframes inkCloudSpread {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.2);
+    opacity: 0.6;
+  }
+}
+
+.ink-cloud {
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(15, 23, 42, 0.9) 0%, transparent 70%);
+  filter: blur(8px);
+}
+
+.animate-ink-squid {
+  animation: inkSquidSwim 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.animate-bubble {
+  animation: bubbleUp var(--duration, 4s) ease-in infinite;
+}
+
+@keyframes bubbleUp {
+  0% {
+    transform: translateY(100vh) scale(0);
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: translateY(-20vh) scale(1.5);
+    opacity: 0;
+  }
+}
+
+@keyframes rapidBubbleUp {
+  0% {
+    transform: translateY(100vh) scale(0.2);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateY(-20vh) scale(2);
+    opacity: 0;
+  }
+}
+
+@keyframes surfaceFade {
+  0% {
+    background-color: transparent;
+  }
+  100% {
+    background-color: white;
+  }
+}
+
+.animate-rapid-bubble {
+  animation: rapidBubbleUp var(--duration, 0.8s) ease-in forwards;
+}
+
+.animate-surface-fade {
+  animation: surfaceFade 1.5s ease-in-out forwards;
+}
+
+@keyframes submergeFade {
+  0% {
+    background-color: transparent;
+  }
+  100% {
+    background-color: black;
+  }
+}
+
+.submerge-overlay {
+  animation: submergeFade 1s ease-in-out forwards;
+}
+
+/* Chrome/Safari Autofill Fix to maintain transparency/theming */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus, 
+input:-webkit-autofill:active {
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: #ecfeff !important; /* matches cyan-50 */
+  transition: background-color 5000s ease-in-out 0s;
+  box-shadow: inset 0 0 20px 20px rgba(15, 23, 42, 0.05); /* very subtle dark tint */
+}
 .abyssal-seabed {
   background:
     radial-gradient(1200px 600px at 30% 15%, rgba(34, 211, 238, 0.10), transparent 60%),

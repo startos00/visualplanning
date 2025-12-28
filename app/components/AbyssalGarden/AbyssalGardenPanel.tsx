@@ -17,6 +17,7 @@ import {
   tryPurchase,
   updatePlacedItemPosition,
 } from "@/app/lib/abyssalGarden";
+import { loadAbyssalGardenState } from "@/app/lib/abyssalGardenState";
 
 type Props = {
   open: boolean;
@@ -65,6 +66,14 @@ export function AbyssalGardenPanel({ open, onClose }: Props) {
   >(null);
 
   const unlocked = useMemo(() => new Set(getUnlockedItemIds(swallowedCount)), [swallowedCount]);
+
+  // Load state from database on mount
+  useEffect(() => {
+    loadAbyssalGardenState().then(() => {
+      refreshFromStorage();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const refreshFromStorage = useCallback(() => {
     setSwallowedCount(getSwallowedCount());

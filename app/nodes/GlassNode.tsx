@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ExternalLink, Sparkles, Target, Wrench } from "lucide-react";
+import { ExternalLink, Sparkles, Target, Wrench, X } from "lucide-react";
 import type { NodeProps } from "reactflow";
 import { Handle, Position } from "reactflow";
 import type { GrimpoNodeData, ModeSetting, NodeKind } from "@/app/lib/graph";
+import ReactMarkdown from "react-markdown";
 
 type EffectiveMode = Exclude<ModeSetting, "auto">;
 
@@ -16,6 +17,32 @@ type GlassNodeData = GrimpoNodeData & {
   onDelete?: (id: string) => void;
   onTaskDone?: (id: string) => void;
 };
+
+// Color palette constants
+const COLORS = {
+  cyan: { hex: "#22d3ee", name: "Cyan" },
+  magenta: { hex: "#e879f9", name: "Magenta" },
+  lime: { hex: "#a3e635", name: "Lime" },
+  amber: { hex: "#fbbf24", name: "Amber" },
+  violet: { hex: "#8b5cf6", name: "Violet" },
+} as const;
+
+const DEFAULT_COLOR = COLORS.cyan.hex;
+
+// Helper function to check if deadline is overdue
+function isOverdue(deadline?: string): boolean {
+  if (!deadline) return false;
+  const today = new Date().toISOString().split("T")[0]; // Get YYYY-MM-DD format
+  return deadline < today;
+}
+
+// Helper function to convert hex to rgba for shadow
+function hexToRgba(hex: string, opacity: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${opacity})`;
+}
 
 function typeBadge(type: NodeKind) {
   switch (type) {
@@ -67,6 +94,16 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
   const [localPdfPreviewUrl, setLocalPdfPreviewUrl] = useState<string | null>(null);
   const [localPdfName, setLocalPdfName] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const persistFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Persisted PDF + summarisation UI state (resource nodes)
+  const [pdfUploading, setPdfUploading] = useState(false);
+  const [ocrRunning, setOcrRunning] = useState(false);
+  const [summarising, setSummarising] = useState(false);
+  const [aiStatus, setAiStatus] = useState<string>("");
+  const [aiError, setAiError] = useState<string>("");
+  const [persistedPdfName, setPersistedPdfName] = useState<string>("");
+  const [notesEditMode, setNotesEditMode] = useState(false);
 
   const zoom = data.zoom ?? 1;
   const mode = data.mode ?? "tactical";
@@ -78,6 +115,23 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
   const badge = typeBadge(nodeKind);
   const done = nodeKind === "tactical" && data.status === "done";
 
+  // Deadline and color logic
+  const overdue = isOverdue(data.deadline);
+  const selectedColor = data.color || DEFAULT_COLOR;
+  // Overdue takes priority: use red border, otherwise use selected color
+  const borderColor = overdue ? "#ef4444" : selectedColor;
+  const glowColor = overdue ? "#ef4444" : selectedColor;
+  // Increased glow intensity for better visibility, especially when zoomed out
+  // When zoomed out, increase intensity significantly to maintain visibility
+  const isZoomedOut = zoom < 1;
+  const baseIntensity = selected ? 0.9 : 0.7;
+  const zoomedOutIntensity = selected ? 1.0 : 0.85;
+  const glowIntensity = isZoomedOut ? zoomedOutIntensity : baseIntensity;
+  // Increase spread when zoomed out for better visibility
+  const baseSpread = selected ? "32px" : "24px";
+  const zoomedOutSpread = selected ? "40px" : "32px";
+  const glowSpread = isZoomedOut ? zoomedOutSpread : baseSpread;
+
   // Cleanup object URL when it changes or node unmounts.
   useEffect(() => {
     return () => {
@@ -85,17 +139,225 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
     };
   }, [localPdfPreviewUrl]);
 
+  async function uploadPersistedPdf(file: File) {
+    setAiError("");
+    setAiStatus("Uploading PDF…");
+    setPdfUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/pdf/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (res.status === 401) {
+        setAiError("Sign in required to upload PDFs.");
+        return;
+      }
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setAiError(body?.error || "Upload failed.");
+        return;
+      }
+
+      const body = (await res.json()) as { blobUrl: string; filename?: string };
+      data.onUpdate?.(id, { pdfUrl: body.blobUrl });
+      setPersistedPdfName(body.filename || file.name || "");
+      setAiStatus("Uploaded.");
+    } catch (e) {
+      console.error(e);
+      setAiError("Upload failed.");
+    } finally {
+      setPdfUploading(false);
+      setTimeout(() => setAiStatus(""), 1200);
+    }
+  }
+
+  async function summarisePersistedPdf() {
+    const pdfUrl = (data.pdfUrl ?? "").trim();
+    if (!pdfUrl) {
+      setAiError("Add a PDF URL or upload a PDF first.");
+      return;
+    }
+
+    setAiError("");
+    setSummarising(true);
+    try {
+      setAiStatus("Extracting text…");
+      const extractedText = await extractPdfTextWithOcr(pdfUrl);
+
+      if (!extractedText.trim()) {
+        setAiError("Could not extract any text from this PDF (even with OCR).");
+        return;
+      }
+
+      setAiStatus("Summarising…");
+      const res = await fetch("/api/pdf/summarise", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nodeId: id,
+          pdfBlobUrl: pdfUrl,
+          filename: persistedPdfName || undefined,
+          extractedText,
+        }),
+      });
+
+      if (res.status === 401) {
+        setAiError("Sign in required to summarise PDFs.");
+        return;
+      }
+
+      const body = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        setAiError(body?.error || "Summarisation failed.");
+        return;
+      }
+
+      const providerLabel =
+        body?.provider === "google" ? "Gemini" : body?.provider === "anthropic" ? "Claude" : null;
+      const modelLabel = typeof body?.model === "string" && body.model.trim() ? body.model : null;
+      if (providerLabel) {
+        setAiStatus(`Summarised with ${providerLabel}${modelLabel ? ` (${modelLabel})` : ""}.`);
+      }
+
+      data.onUpdate?.(id, { notes: body.summaryMarkdown });
+      setAiStatus("Saved summary.");
+    } catch (e) {
+      console.error(e);
+      setAiError("Summarisation failed.");
+    } finally {
+      setSummarising(false);
+      setTimeout(() => setAiStatus(""), 1400);
+    }
+  }
+
+  async function extractPdfTextWithOcr(pdfUrl: string) {
+    const MAX_PAGES = 5;
+    const OCR_MIN_TEXT_CHARS = 300;
+
+    setAiError("");
+    setAiStatus("Downloading PDF…");
+
+    let pdfBytes: ArrayBuffer;
+    try {
+      const res = await fetch(pdfUrl);
+      if (!res.ok) throw new Error("Failed to fetch PDF");
+      pdfBytes = await res.arrayBuffer();
+    } catch {
+      // Common cause: CORS blocked on direct browser fetch for third-party PDF URLs.
+      // Fallback to same-origin proxy route.
+      setAiStatus("Downloading PDF (proxy)…");
+      const proxyRes = await fetch(`/api/pdf/fetch?url=${encodeURIComponent(pdfUrl)}`);
+      if (proxyRes.status === 401) {
+        throw new Error("Sign in required to fetch PDFs.");
+      }
+      if (!proxyRes.ok) {
+        throw new Error("Failed to fetch PDF (proxy).");
+      }
+      pdfBytes = await proxyRes.arrayBuffer();
+    }
+
+    // pdfjs setup (dynamic import so it stays client-only)
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf");
+    // Worker setup for bundlers
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+      "pdfjs-dist/legacy/build/pdf.worker.min.mjs",
+      import.meta.url,
+    ).toString();
+
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    const doc = await pdfjs.getDocument({ data: pdfBytes }).promise;
+    const pageCount = Math.min(doc.numPages, MAX_PAGES);
+
+    // First pass: try native text extraction (fast for real text PDFs)
+    setAiStatus(`Extracting text (pages 1-${pageCount})…`);
+    let extractedText = "";
+    for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
+      const page = await doc.getPage(pageNum);
+      const textContent = await page.getTextContent();
+      type PdfjsTextItem = { str?: string };
+      const strings = (textContent.items as unknown as PdfjsTextItem[])
+        .map((it) => it.str ?? "")
+        .filter(Boolean);
+      const pageText = strings.join(" ").replace(/\s+/g, " ").trim();
+      if (pageText) extractedText += pageText + "\n\n";
+    }
+
+    // Second pass: OCR if the extracted text is too small (scanned PDFs)
+    if (extractedText.trim().length >= OCR_MIN_TEXT_CHARS) {
+      return extractedText.trim();
+    }
+
+    setOcrRunning(true);
+    setAiStatus(`OCR running (pages 1-${pageCount})…`);
+
+    const tesseract = await import("tesseract.js");
+    const worker = await tesseract.createWorker({
+      logger: (m: unknown) => {
+        if (!m || typeof m !== "object") return;
+        const status = (m as { status?: unknown }).status;
+        const progress = (m as { progress?: unknown }).progress;
+        if (typeof status === "string" && typeof progress === "number") {
+          const pct = Math.round(progress * 100);
+          setAiStatus(`OCR: ${status} (${pct}%)`);
+        }
+      },
+    });
+
+    try {
+      await worker.loadLanguage("eng");
+      await worker.initialize("eng");
+
+      let ocrText = "";
+      for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
+        setAiStatus(`Rendering page ${pageNum}/${pageCount}…`);
+        const page = await doc.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 1.5 });
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) continue;
+        await page.render({ canvasContext: ctx, viewport }).promise;
+
+        setAiStatus(`OCR page ${pageNum}/${pageCount}…`);
+        const result = await worker.recognize(canvas);
+        const text = (result?.data?.text || "").trim();
+        if (text) ocrText += text + "\n\n";
+      }
+
+      const combined = `${extractedText}\n\n${ocrText}`.trim();
+      return combined || "";
+    } finally {
+      setOcrRunning(false);
+      await worker.terminate().catch(() => null);
+    }
+  }
+
+  // Build dynamic border and shadow styles
+  const borderRgba = hexToRgba(borderColor, 0.3);
+  const glowRgba = hexToRgba(glowColor, glowIntensity);
+  const borderStyle = { borderColor: borderRgba };
+  const shadowStyle = { boxShadow: `0 0 ${glowSpread} ${glowRgba}` };
+
   return (
     <div
       className={[
         "relative w-[320px] rounded-3xl border bg-slate-900/50 backdrop-blur-md",
         "transition-all duration-200",
-        "border-cyan-300/30",
-        selected ? "shadow-[0_0_22px_rgba(34,211,238,0.45)]" : "shadow-[0_0_14px_rgba(34,211,238,0.18)]",
         done ? "opacity-60" : "",
         !selected && !done && !swallowing ? "octo-breath" : "",
         swallowing ? "scale-0 opacity-0" : "",
       ].join(" ")}
+      style={{ ...borderStyle, ...shadowStyle }}
     >
       {/* sheen */}
       <div className="pointer-events-none absolute inset-0 rounded-3xl bg-gradient-to-b from-white/10 to-transparent" />
@@ -119,16 +381,29 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
               {badge.label}
             </span>
           </div>
-          {type === "resource" && !titleOnly && data.link ? (
-            <button
-              onClick={() => window.open(data.link, "_blank", "noopener,noreferrer")}
-              className="inline-flex items-center gap-1 rounded-full border border-rose-300/20 bg-rose-500/10 px-2 py-1 text-xs text-rose-200 shadow-[0_0_14px_rgba(244,63,94,0.18)] hover:bg-rose-500/20"
-              title="Open link"
-            >
-              <ExternalLink className="h-3 w-3" />
-              Open
-            </button>
-          ) : null}
+          <div className="flex items-center gap-2">
+            {/* Deadline date input */}
+            <input
+              type="date"
+              value={data.deadline ?? ""}
+              onChange={(e) => {
+                const value = e.target.value || undefined;
+                data.onUpdate?.(id, { deadline: value });
+              }}
+              className="h-6 rounded border-0 bg-transparent px-1 text-xs text-white opacity-60 transition-opacity hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-1 focus:ring-cyan-300/50"
+              title="Set deadline"
+            />
+            {type === "resource" && !titleOnly && data.link ? (
+              <button
+                onClick={() => window.open(data.link, "_blank", "noopener,noreferrer")}
+                className="inline-flex items-center gap-1 rounded-full border border-rose-300/20 bg-rose-500/10 px-2 py-1 text-xs text-rose-200 shadow-[0_0_14px_rgba(244,63,94,0.18)] hover:bg-rose-500/20"
+                title="Open link"
+              >
+                <ExternalLink className="h-3 w-3" />
+                Open
+              </button>
+            ) : null}
+          </div>
         </div>
 
         <input
@@ -152,18 +427,45 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                   placeholder="Link (URL)…"
                   className="w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 text-sm text-cyan-50 outline-none placeholder:text-cyan-200/30 focus:border-cyan-200/40"
                 />
-                <input
-                  value={data.pdfUrl ?? ""}
-                  onChange={(e) => data.onUpdate?.(id, { pdfUrl: e.target.value })}
-                  placeholder="PDF URL…"
-                  className="w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 text-sm text-cyan-50 outline-none placeholder:text-cyan-200/30 focus:border-cyan-200/40"
-                />
-                <input
-                  value={data.videoUrl ?? ""}
-                  onChange={(e) => data.onUpdate?.(id, { videoUrl: e.target.value })}
-                  placeholder="YouTube URL…"
-                  className="w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 text-sm text-cyan-50 outline-none placeholder:text-cyan-200/30 focus:border-cyan-200/40"
-                />
+                <div className="relative">
+                  <input
+                    value={data.pdfUrl ?? ""}
+                    onChange={(e) => data.onUpdate?.(id, { pdfUrl: e.target.value })}
+                    placeholder="PDF URL…"
+                    className="w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 pr-8 text-sm text-cyan-50 outline-none placeholder:text-cyan-200/30 focus:border-cyan-200/40"
+                  />
+                  {data.pdfUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        data.onUpdate?.(id, { pdfUrl: "" });
+                        setPersistedPdfName("");
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-cyan-200/60 hover:bg-slate-800/50 hover:text-cyan-200"
+                      title="Clear PDF URL"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </div>
+                <div className="relative">
+                  <input
+                    value={data.videoUrl ?? ""}
+                    onChange={(e) => data.onUpdate?.(id, { videoUrl: e.target.value })}
+                    placeholder="YouTube URL…"
+                    className="w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 pr-8 text-sm text-cyan-50 outline-none placeholder:text-cyan-200/30 focus:border-cyan-200/40"
+                  />
+                  {data.videoUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => data.onUpdate?.(id, { videoUrl: "" })}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-cyan-200/60 hover:bg-slate-800/50 hover:text-cyan-200"
+                      title="Clear video URL"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </div>
 
                 {/* Upload PDF preview-only (not persisted) */}
                 <div className="flex items-center justify-between gap-2">
@@ -219,6 +521,64 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                   </div>
                 ) : null}
 
+                {/* Upload PDF (persisted) */}
+                <div className="flex items-center justify-between gap-2">
+                  <input
+                    ref={persistFileInputRef}
+                    type="file"
+                    accept="application/pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      uploadPersistedPdf(file);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => persistFileInputRef.current?.click()}
+                    disabled={pdfUploading || ocrRunning || summarising}
+                    className={[
+                      "rounded-full border border-cyan-300/20 bg-slate-950/30 px-3 py-1 text-xs text-cyan-100/80 hover:bg-slate-950/45",
+                      pdfUploading || ocrRunning || summarising ? "opacity-50" : "",
+                    ].join(" ")}
+                    title="Upload and save a PDF (persists)"
+                  >
+                    {pdfUploading ? "Uploading…" : "Upload PDF (save)"}
+                  </button>
+
+                  {aiStatus ? <div className="text-xs text-cyan-100/60">{aiStatus}</div> : null}
+                </div>
+
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => summarisePersistedPdf()}
+                    disabled={pdfUploading || ocrRunning || summarising}
+                    className={[
+                      "rounded-full border border-rose-300/20 bg-rose-500/10 px-3 py-1 text-xs text-rose-200 shadow-[0_0_14px_rgba(244,63,94,0.18)] hover:bg-rose-500/20",
+                      pdfUploading || ocrRunning || summarising ? "opacity-50" : "",
+                    ].join(" ")}
+                    title="Generate a structured summary and save it into this card"
+                  >
+                    {summarising ? "Summarising…" : "Summarise"}
+                  </button>
+
+                  {(data.pdfUrl ?? "").trim() ? (
+                    <div className="text-xs text-cyan-100/60">
+                      PDF: {persistedPdfName ? persistedPdfName : "ready"}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-cyan-100/60">No saved PDF yet</div>
+                  )}
+                </div>
+
+                {aiError ? (
+                  <div className="text-xs text-rose-200/90">
+                    {aiError}
+                  </div>
+                ) : null}
+
                 {/* Previews */}
                 {(() => {
                   const pdfSrc = localPdfPreviewUrl || (data.pdfUrl ?? "").trim();
@@ -230,15 +590,38 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                         <div className="rounded-2xl border border-cyan-300/20 bg-slate-950/20 p-2">
                           <div className="mb-2 flex items-center justify-between gap-2">
                             <div className="text-xs tracking-widest text-cyan-100/70">PDF</div>
-                            <button
-                              type="button"
-                              onClick={() => window.open(pdfSrc, "_blank", "noopener,noreferrer")}
-                              className="inline-flex items-center gap-1 rounded-full border border-rose-300/20 bg-rose-500/10 px-2 py-1 text-xs text-rose-200 hover:bg-rose-500/20"
-                              title="Open PDF in new tab"
-                            >
-                              <ExternalLink className="h-3 w-3" />
-                              Open
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (localPdfPreviewUrl) {
+                                    setLocalPdfPreviewUrl((prev) => {
+                                      if (prev) URL.revokeObjectURL(prev);
+                                      return null;
+                                    });
+                                    setLocalPdfName("");
+                                    if (fileInputRef.current) fileInputRef.current.value = "";
+                                  } else {
+                                    data.onUpdate?.(id, { pdfUrl: "" });
+                                    setPersistedPdfName("");
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1 rounded-full border border-rose-300/20 bg-rose-500/10 px-2 py-1 text-xs text-rose-200 hover:bg-rose-500/20"
+                                title="Delete PDF"
+                              >
+                                <X className="h-3 w-3" />
+                                Delete
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => window.open(pdfSrc, "_blank", "noopener,noreferrer")}
+                                className="inline-flex items-center gap-1 rounded-full border border-rose-300/20 bg-rose-500/10 px-2 py-1 text-xs text-rose-200 hover:bg-rose-500/20"
+                                title="Open PDF in new tab"
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                                Open
+                              </button>
+                            </div>
                           </div>
                           <iframe
                             title="PDF preview"
@@ -253,17 +636,28 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                         <div className="rounded-2xl border border-cyan-300/20 bg-slate-950/20 p-2">
                           <div className="mb-2 flex items-center justify-between gap-2">
                             <div className="text-xs tracking-widest text-cyan-100/70">VIDEO</div>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                window.open((data.videoUrl ?? "").trim(), "_blank", "noopener,noreferrer")
-                              }
-                              className="inline-flex items-center gap-1 rounded-full border border-rose-300/20 bg-rose-500/10 px-2 py-1 text-xs text-rose-200 hover:bg-rose-500/20"
-                              title="Open video in new tab"
-                            >
-                              <ExternalLink className="h-3 w-3" />
-                              Open
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => data.onUpdate?.(id, { videoUrl: "" })}
+                                className="inline-flex items-center gap-1 rounded-full border border-rose-300/20 bg-rose-500/10 px-2 py-1 text-xs text-rose-200 hover:bg-rose-500/20"
+                                title="Delete video"
+                              >
+                                <X className="h-3 w-3" />
+                                Delete
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  window.open((data.videoUrl ?? "").trim(), "_blank", "noopener,noreferrer")
+                                }
+                                className="inline-flex items-center gap-1 rounded-full border border-rose-300/20 bg-rose-500/10 px-2 py-1 text-xs text-rose-200 hover:bg-rose-500/20"
+                                title="Open video in new tab"
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                                Open
+                              </button>
+                            </div>
                           </div>
 
                           {ytEmbed ? (
@@ -288,12 +682,37 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
               </div>
             ) : null}
 
-            <textarea
-              value={data.notes ?? ""}
-              onChange={(e) => data.onUpdate?.(id, { notes: e.target.value })}
-              placeholder={type === "resource" ? "Summary / notes…" : "Notes…"}
-              className="min-h-[88px] w-full resize-none rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 text-sm text-cyan-50 outline-none placeholder:text-cyan-200/30 focus:border-cyan-200/40"
-            />
+            <div className="relative">
+              {/* For tactical cards, always show textarea (no markdown preview) */}
+              {/* For resource cards, show markdown preview if notes exist and not in edit mode */}
+              {type === "tactical" || notesEditMode || !data.notes ? (
+                <textarea
+                  value={data.notes ?? ""}
+                  onChange={(e) => data.onUpdate?.(id, { notes: e.target.value })}
+                  onBlur={() => {
+                    // Auto-exit edit mode after a short delay if notes are markdown-like (resource cards only)
+                    if (type === "resource" && data.notes && (data.notes.includes("##") || data.notes.includes("**"))) {
+                      setTimeout(() => setNotesEditMode(false), 300);
+                    }
+                  }}
+                  placeholder={type === "resource" ? "Summary / notes…" : "Next step…"}
+                  className="min-h-[88px] min-w-[200px] w-full resize rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 text-sm text-cyan-50 outline-none placeholder:text-cyan-200/30 focus:border-cyan-200/40"
+                />
+              ) : (
+                <div className="group relative min-h-[88px] min-w-[200px] w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 overflow-auto resize">
+                  <div className="markdown-content text-sm text-cyan-100 [&_h2]:mt-4 [&_h2]:mb-2 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:text-cyan-50 [&_h3]:mt-3 [&_h3]:mb-2 [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:text-cyan-50 [&_p]:my-2 [&_p]:leading-relaxed [&_ul]:my-2 [&_ul]:ml-4 [&_ul]:list-disc [&_ol]:my-2 [&_ol]:ml-4 [&_ol]:list-decimal [&_li]:my-1 [&_strong]:font-semibold [&_strong]:text-cyan-50 [&_code]:bg-slate-900/50 [&_code]:text-cyan-200 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_pre]:bg-slate-900/50 [&_pre]:text-cyan-100 [&_pre]:rounded [&_pre]:p-2 [&_pre]:overflow-x-auto [&_pre]:my-2 [&_pre_code]:bg-transparent [&_pre_code]:p-0">
+                    <ReactMarkdown>{data.notes}</ReactMarkdown>
+                  </div>
+                  <button
+                    onClick={() => setNotesEditMode(true)}
+                    className="absolute right-2 top-2 hidden rounded bg-slate-800/80 px-2 py-1 text-xs text-cyan-200 opacity-0 transition-opacity hover:bg-slate-700/80 group-hover:opacity-100"
+                    title="Edit notes"
+                  >
+                    Edit
+                  </button>
+                </div>
+              )}
+            </div>
 
             {type === "tactical" ? (
               <div className="flex items-center justify-between">
@@ -327,6 +746,34 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                 </button>
               </div>
             ) : null}
+
+            {/* Color picker */}
+            <div className="flex items-center justify-center gap-2 pt-2">
+              {Object.values(COLORS).map((color) => {
+                const isSelected = (data.color || DEFAULT_COLOR) === color.hex;
+                return (
+                  <button
+                    key={color.hex}
+                    type="button"
+                    onClick={() => {
+                      // If clicking Cyan (default), set to undefined to use default
+                      // Otherwise, set to the selected color
+                      const newColor = color.hex === DEFAULT_COLOR ? undefined : color.hex;
+                      data.onUpdate?.(id, { color: newColor });
+                    }}
+                    className={[
+                      "h-5 w-5 rounded-full border-2 transition-all duration-200",
+                      isSelected
+                        ? "scale-125 border-white shadow-[0_0_8px_rgba(255,255,255,0.5)]"
+                        : "border-transparent hover:scale-110 hover:border-white/50",
+                    ].join(" ")}
+                    style={{ backgroundColor: color.hex }}
+                    title={`Select ${color.name} color`}
+                    aria-label={`Select ${color.name} color`}
+                  />
+                );
+              })}
+            </div>
           </div>
         ) : null}
       </div>

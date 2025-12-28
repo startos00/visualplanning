@@ -149,3 +149,10 @@ None. This is a purely presentational component with transient interaction state
 - Theme-aware palette variants (e.g., green/amber bioluminescence modes).
 
 
+
+
+
+
+
+
+

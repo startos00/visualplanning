@@ -1,0 +1,128 @@
+-- Canvases table
+CREATE TABLE IF NOT EXISTS canvases (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL,
+  name TEXT,
+  nodes JSONB,
+  edges JSONB,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- Grimpo states table
+CREATE TABLE IF NOT EXISTS grimpo_states (
+  id SERIAL PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  nodes JSONB,
+  edges JSONB,
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- Migration: If you have an existing grimpo_states table with user_key column,
+-- run this migration SQL to update it:
+-- ALTER TABLE grimpo_states RENAME COLUMN user_key TO user_id;
+-- ALTER TABLE grimpo_states ADD CONSTRAINT fk_grimpo_states_user_id FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+-- CREATE INDEX IF NOT EXISTS idx_grimpo_states_user_id ON grimpo_states(user_id);
+
+-- Graph state table
+CREATE TABLE IF NOT EXISTS graph_states (
+  id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  nodes JSONB NOT NULL DEFAULT '[]'::jsonb,
+  edges JSONB NOT NULL DEFAULT '[]'::jsonb,
+  mode_setting VARCHAR(20) NOT NULL DEFAULT 'auto',
+  viewport JSONB,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (id, user_id)
+);
+
+-- Abyssal Garden state table
+CREATE TABLE IF NOT EXISTS abyssal_garden_states (
+  id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  swallowed_count INTEGER NOT NULL DEFAULT 0,
+  abyssal_currency INTEGER NOT NULL DEFAULT 0,
+  inventory JSONB NOT NULL DEFAULT '{"abyssal-rock":0,"neon-sandcastle":0,"crystalline-spire":0,"sirens-tail":0,"lost-bounty":0}'::jsonb,
+  garden_layout JSONB NOT NULL DEFAULT '[]'::jsonb,
+  awarded_tasks JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (id, user_id)
+);
+
+-- Better-Auth tables
+-- Users table
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  name VARCHAR(255),
+  email VARCHAR(255) NOT NULL UNIQUE,
+  email_verified BOOLEAN DEFAULT FALSE,
+  image VARCHAR(255),
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Sessions table
+CREATE TABLE IF NOT EXISTS sessions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token TEXT NOT NULL UNIQUE,
+  expires_at TIMESTAMP NOT NULL,
+  ip_address VARCHAR(45),
+  user_agent VARCHAR(255),
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Accounts table (for OAuth providers)
+CREATE TABLE IF NOT EXISTS accounts (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  account_id TEXT NOT NULL,
+  provider_id TEXT NOT NULL,
+  provider_type TEXT NOT NULL,
+  access_token TEXT,
+  refresh_token TEXT,
+  expires_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Verification tokens table (for email verification and password reset)
+CREATE TABLE IF NOT EXISTS verification_tokens (
+  id TEXT PRIMARY KEY,
+  identifier VARCHAR(255) NOT NULL,
+  token TEXT NOT NULL UNIQUE,
+  expires_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- PDF Summaries table
+-- Stores a persisted PDF reference + the LLM-generated summary for a given user + node.
+CREATE TABLE IF NOT EXISTS pdf_summaries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  node_id TEXT NOT NULL,
+  pdf_blob_url TEXT NOT NULL,
+  pdf_filename TEXT,
+  summary_markdown TEXT NOT NULL,
+  summary_json JSONB,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, node_id)
+);
+
+-- Indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_accounts_user_id ON accounts(user_id);
+CREATE INDEX IF NOT EXISTS idx_accounts_provider_id ON accounts(provider_id);
+CREATE INDEX IF NOT EXISTS idx_verification_tokens_identifier ON verification_tokens(identifier);
+CREATE INDEX IF NOT EXISTS idx_verification_tokens_token ON verification_tokens(token);
+CREATE INDEX IF NOT EXISTS idx_verification_tokens_expires_at ON verification_tokens(expires_at);
+CREATE INDEX IF NOT EXISTS idx_grimpo_states_user_id ON grimpo_states(user_id);
+CREATE INDEX IF NOT EXISTS idx_pdf_summaries_user_id ON pdf_summaries(user_id);
+

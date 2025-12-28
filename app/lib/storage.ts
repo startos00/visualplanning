@@ -1,8 +1,6 @@
 import type { Edge, Viewport } from "reactflow";
 import type { GrimpoNode, ModeSetting } from "./graph";
 
-const STORAGE_KEY = "grimpoLite:v1";
-
 export type PersistedState = {
   nodes: GrimpoNode[];
   edges: Edge[];
@@ -10,27 +8,47 @@ export type PersistedState = {
   viewport?: Viewport;
 };
 
-export function loadState(): PersistedState | null {
+/**
+ * Load graph state from the database via API route.
+ */
+export async function loadState(): Promise<PersistedState | null> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as PersistedState;
+    const response = await fetch("/api/graph");
+    if (!response.ok) {
+      return null;
+    }
+    const data = await response.json();
+    return data as PersistedState | null;
   } catch {
     return null;
   }
 }
 
-export function saveState(state: PersistedState) {
+/**
+ * Save graph state to the database via API route.
+ */
+export async function saveState(state: PersistedState): Promise<void> {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    await fetch("/api/graph", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(state),
+    });
   } catch {
-    // ignore (storage full / blocked)
+    // ignore (network error / server error)
   }
 }
 
-export function clearState() {
+/**
+ * Clear graph state from the database via API route.
+ */
+export async function clearState(): Promise<void> {
   try {
-    localStorage.removeItem(STORAGE_KEY);
+    await fetch("/api/graph", {
+      method: "DELETE",
+    });
   } catch {
     // ignore
   }

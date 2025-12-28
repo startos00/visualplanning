@@ -13,6 +13,9 @@ export type GrimpoNodeData = {
   videoUrl?: string;
   // Tactical only:
   status?: TacticalStatus;
+  // Visual customization:
+  deadline?: string; // ISO date string: "YYYY-MM-DD"
+  color?: string; // Hex color string: "#22d3ee"
 };
 
 // React Flow's `useNodesState` currently types node `type` as `string | undefined`,

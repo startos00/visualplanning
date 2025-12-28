@@ -33,78 +33,50 @@ export const ABYSSAL_ITEMS: AbyssalItemDef[] = [
   { id: "lost-bounty", name: "The Lost Bounty", descriptor: "Treasure Chest", unlockAt: 50, cost: 50 },
 ];
 
-const KEY_SWALLOWED = "swallowedCount";
-const KEY_CURRENCY = "abyssalCurrency";
-const KEY_INVENTORY = "abyssalInventory";
-const KEY_LAYOUT = "abyssalGardenLayout";
-const KEY_AWARDED_TASKS = "abyssalAwardedTasks";
+// Re-export state management functions
+import {
+  getSwallowedCount as getSwallowedCountFromState,
+  setSwallowedCount as setSwallowedCountInState,
+  getAbyssalCurrency as getAbyssalCurrencyFromState,
+  setAbyssalCurrency as setAbyssalCurrencyInState,
+  loadInventory as loadInventoryFromState,
+  saveInventory as saveInventoryInState,
+  loadGardenLayout as loadGardenLayoutFromState,
+  saveGardenLayout as saveGardenLayoutInState,
+  getAwardedTasks as getAwardedTasksFromState,
+  setAwardedTasks as setAwardedTasksInState,
+  loadAbyssalGardenState,
+} from "./abyssalGardenState";
 
-const memoryStore = new Map<string, string>();
+// Initialize state on module load (client-side only)
+if (typeof window !== "undefined") {
+  loadAbyssalGardenState().catch(() => {
+    // Ignore initialization errors
+  });
+}
 
 function canUseWindow(): boolean {
-  return typeof window !== "undefined";
-}
-
-function getItem(key: string): string | null {
-  if (!canUseWindow()) return memoryStore.get(key) ?? null;
-  try {
-    return window.localStorage.getItem(key);
-  } catch {
-    return memoryStore.get(key) ?? null;
-  }
-}
-
-function setItem(key: string, value: string) {
-  if (!canUseWindow()) {
-    memoryStore.set(key, value);
-    return;
-  }
-  try {
-    window.localStorage.setItem(key, value);
-  } catch {
-    memoryStore.set(key, value);
-  }
-}
-
-function safeParseInt(raw: string | null): { value: number; valid: boolean } {
-  if (raw === null) return { value: 0, valid: false };
-  const trimmed = raw.trim();
-  if (!trimmed) return { value: 0, valid: false };
-  const n = Number.parseInt(trimmed, 10);
-  if (!Number.isFinite(n) || Number.isNaN(n)) return { value: 0, valid: false };
-  if (n < 0) return { value: 0, valid: false };
-  return { value: n, valid: true };
-}
-
-function safeJsonParse<T>(raw: string | null): T | null {
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return null;
-  }
+  return typeof window !== "undefined" && typeof window.dispatchEvent === "function";
 }
 
 export function getSwallowedCount(): number {
-  const raw = getItem(KEY_SWALLOWED);
-  const parsed = safeParseInt(raw);
-  if (!parsed.valid) setItem(KEY_SWALLOWED, "0");
-  return parsed.value;
+  return getSwallowedCountFromState();
 }
 
 export function setSwallowedCount(n: number) {
-  setItem(KEY_SWALLOWED, String(Math.max(0, Math.floor(n))));
+  setSwallowedCountInState(n).catch(() => {
+    // Ignore errors
+  });
 }
 
 export function getAbyssalCurrency(): number {
-  const raw = getItem(KEY_CURRENCY);
-  const parsed = safeParseInt(raw);
-  if (!parsed.valid) setItem(KEY_CURRENCY, "0");
-  return parsed.value;
+  return getAbyssalCurrencyFromState();
 }
 
 export function setAbyssalCurrency(n: number) {
-  setItem(KEY_CURRENCY, String(Math.max(0, Math.floor(n))));
+  setAbyssalCurrencyInState(n).catch(() => {
+    // Ignore errors
+  });
 }
 
 export function getUnlockedItemIds(swallowedCount: number): AbyssalItemId[] {
@@ -112,57 +84,17 @@ export function getUnlockedItemIds(swallowedCount: number): AbyssalItemId[] {
 }
 
 export function loadInventory(): AbyssalInventory {
-  const empty: AbyssalInventory = {
-    "abyssal-rock": 0,
-    "neon-sandcastle": 0,
-    "crystalline-spire": 0,
-    "sirens-tail": 0,
-    "lost-bounty": 0,
-  };
-
-  const parsed = safeJsonParse<Record<string, unknown>>(getItem(KEY_INVENTORY));
-  if (!parsed) return empty;
-
-  const next = { ...empty };
-  for (const id of Object.keys(empty) as AbyssalItemId[]) {
-    const v = parsed[id];
-    const n = typeof v === "number" ? v : typeof v === "string" ? Number.parseInt(v, 10) : 0;
-    next[id] = Number.isFinite(n) && !Number.isNaN(n) ? Math.max(0, Math.floor(n)) : 0;
-  }
-  return next;
+  return loadInventoryFromState();
 }
 
 export function saveInventory(inv: AbyssalInventory) {
-  const clean: AbyssalInventory = {
-    "abyssal-rock": Math.max(0, Math.floor(inv["abyssal-rock"] ?? 0)),
-    "neon-sandcastle": Math.max(0, Math.floor(inv["neon-sandcastle"] ?? 0)),
-    "crystalline-spire": Math.max(0, Math.floor(inv["crystalline-spire"] ?? 0)),
-    "sirens-tail": Math.max(0, Math.floor(inv["sirens-tail"] ?? 0)),
-    "lost-bounty": Math.max(0, Math.floor(inv["lost-bounty"] ?? 0)),
-  };
-  setItem(KEY_INVENTORY, JSON.stringify(clean));
+  saveInventoryInState(inv).catch(() => {
+    // Ignore errors
+  });
 }
 
 export function loadGardenLayout(): AbyssalPlacedItem[] {
-  const parsed = safeJsonParse<unknown[]>(getItem(KEY_LAYOUT));
-  if (!parsed || !Array.isArray(parsed)) return [];
-
-  const known = new Set<AbyssalItemId>(ABYSSAL_ITEMS.map((i) => i.id));
-
-  const out: AbyssalPlacedItem[] = [];
-  for (const row of parsed) {
-    if (!row || typeof row !== "object") continue;
-    const r = row as Partial<AbyssalPlacedItem>;
-    if (!r.id || typeof r.id !== "string") continue;
-    if (!r.itemId || typeof r.itemId !== "string") continue;
-    if (!known.has(r.itemId as AbyssalItemId)) continue;
-    const x = typeof r.x === "number" && Number.isFinite(r.x) ? r.x : null;
-    const y = typeof r.y === "number" && Number.isFinite(r.y) ? r.y : null;
-    if (x === null || y === null) continue;
-    const zIndex = typeof r.zIndex === "number" && Number.isFinite(r.zIndex) ? r.zIndex : undefined;
-    out.push({ id: r.id, itemId: r.itemId as AbyssalItemId, x, y, zIndex });
-  }
-  return out;
+  return loadGardenLayoutFromState();
 }
 
 export function saveGardenLayout(layout: AbyssalPlacedItem[]) {
@@ -176,7 +108,9 @@ export function saveGardenLayout(layout: AbyssalPlacedItem[]) {
       y: Number.isFinite(p.y) ? p.y : 0,
       zIndex: Number.isFinite(p.zIndex ?? idx) ? (p.zIndex ?? idx) : idx,
     }));
-  setItem(KEY_LAYOUT, JSON.stringify(clean));
+  saveGardenLayoutInState(clean).catch(() => {
+    // Ignore errors
+  });
 }
 
 export function dispatchAbyssalUpdate(detail?: { newlyUnlockedItemIds?: AbyssalItemId[] }) {
@@ -204,7 +138,7 @@ export function awardForTaskCompletionForTaskId(taskId: string | null): {
   newlyUnlockedItemIds: AbyssalItemId[];
 } {
   if (taskId) {
-    const awarded = safeJsonParse<Record<string, unknown>>(getItem(KEY_AWARDED_TASKS)) ?? {};
+    const awarded = getAwardedTasksFromState();
     if (awarded[taskId]) {
       // Already credited for this task; no-op.
       return {
@@ -213,8 +147,10 @@ export function awardForTaskCompletionForTaskId(taskId: string | null): {
         newlyUnlockedItemIds: [],
       };
     }
-    awarded[taskId] = 1;
-    setItem(KEY_AWARDED_TASKS, JSON.stringify(awarded));
+    const updated = { ...awarded, [taskId]: 1 };
+    setAwardedTasksInState(updated).catch(() => {
+      // Ignore errors
+    });
   }
 
   const prevSwallowed = getSwallowedCount();
