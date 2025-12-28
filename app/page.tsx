@@ -7,6 +7,7 @@ import ReactFlow, {
   addEdge,
   useEdgesState,
   useNodesState,
+  ReactFlowProvider,
   type Connection,
   type DefaultEdgeOptions,
   type ReactFlowInstance,
@@ -19,12 +20,14 @@ import { nodeTypes } from "@/app/nodes/nodeTypes";
 import { clearState } from "@/app/lib/storage";
 import { loadState, saveState } from "@/app/actions/canvas";
 import { useRouter } from "next/navigation";
+import { Book } from "lucide-react";
 import { DumboOctopus } from "@/app/components/DumboOctopus";
 import { DumboOctopusCornerLogo } from "@/app/components/DumboOctopusCornerLogo";
 import { Mascot } from "@/app/components/Mascot";
 import { TemplateSpawner } from "@/app/components/TemplateSpawner";
 import { buildThinkingPatternTemplate, type ThinkingPattern, type ThinkingRole } from "@/app/lib/templates";
 import { AbyssalGardenPanel } from "@/app/components/AbyssalGarden/AbyssalGardenPanel";
+import { ResourceChamber } from "@/app/components/ResourceChamber";
 import { awardForTaskCompletionForTaskId } from "@/app/lib/abyssalGarden";
 import { SurfaceButton } from "@/app/components/auth/SurfaceButton";
 import { DecompressionOverlay } from "@/app/components/auth/DecompressionOverlay";
@@ -33,15 +36,7 @@ import { DecompressionOverlay } from "@/app/components/auth/DecompressionOverlay
 const memoizedNodeTypes = nodeTypes;
 const memoizedEdgeTypes = {};
 
-export default function Home(props: {
-  params: Promise<any>;
-  searchParams: Promise<any>;
-}) {
-  // Explicitly unwrap promises to avoid Next.js 15+ synchronous access errors
-  // when props are enumerated by dev tools/extensions.
-  use(props.params);
-  use(props.searchParams);
-
+function HomeContent() {
   const router = useRouter();
   const seeded = seedGraph();
   const [nodes, setNodes, onNodesChange] = useNodesState(seeded.nodes);
@@ -53,6 +48,7 @@ export default function Home(props: {
   const [loaded, setLoaded] = useState(false);
   const [octopusInstances, setOctopusInstances] = useState<string[]>([]);
   const [abyssalOpen, setAbyssalOpen] = useState(false);
+  const [resourceChamberOpen, setResourceChamberOpen] = useState(false);
   const [isSurfacing, setIsSurfacing] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "auth-required">("idle");
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -324,6 +320,22 @@ export default function Home(props: {
       ))}
 
       <AbyssalGardenPanel open={abyssalOpen} onClose={() => setAbyssalOpen(false)} />
+      <ResourceChamber 
+        isOpen={resourceChamberOpen} 
+        onClose={() => setResourceChamberOpen(false)} 
+        onAddResource={(data) => {
+          const kind = "resource";
+          const id = `${kind}-${Date.now()}`;
+          const position = getViewportCenterFlowPosition();
+          const base = { title: "New Resource", notes: "", link: "" } satisfies GrimpoNodeData;
+          setNodes((nds) => nds.concat({ 
+            id, 
+            type: kind, 
+            position, 
+            data: { ...base, ...data } as GrimpoNodeData 
+          }));
+        }}
+      />
 
       <ReactFlow
         nodes={viewNodes}
@@ -447,9 +459,18 @@ export default function Home(props: {
       </div>
 
       {/* Surface Button - Positioned under the top-left logo */}
-      <div className="pointer-events-none absolute top-[72px] left-[16px] z-50">
+      <div className="pointer-events-none absolute top-[72px] left-[16px] z-50 flex flex-col gap-3">
         <div className="pointer-events-auto">
           <SurfaceButton onSurface={() => setIsSurfacing(true)} disabled={isSurfacing} />
+        </div>
+        <div className="pointer-events-auto">
+          <button
+            onClick={() => setResourceChamberOpen(true)}
+            className="group flex h-12 w-12 items-center justify-center rounded-2xl border border-orange-500/30 bg-slate-950/40 text-orange-400 backdrop-blur-md transition-all hover:bg-orange-500/10 hover:shadow-[0_0_20px_rgba(249,115,22,0.2)]"
+            title="Open The Resource Chamber"
+          >
+            <Book className="h-6 w-6 transition-transform group-hover:scale-110" />
+          </button>
         </div>
       </div>
 
@@ -495,5 +516,21 @@ export default function Home(props: {
         </div>
       )}
     </div>
+  );
+}
+
+export default function Home(props: {
+  params: Promise<any>;
+  searchParams: Promise<any>;
+}) {
+  // Explicitly unwrap promises to avoid Next.js 15+ synchronous access errors
+  // when props are enumerated by dev tools/extensions.
+  use(props.params);
+  use(props.searchParams);
+
+  return (
+    <ReactFlowProvider>
+      <HomeContent />
+    </ReactFlowProvider>
   );
 }

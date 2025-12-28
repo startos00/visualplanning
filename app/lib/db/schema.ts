@@ -148,6 +148,28 @@ export const pdfSummaries = pgTable(
   }),
 );
 
+// PDF Highlights table
+export const highlights = pgTable(
+  "highlights",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    nodeId: text("node_id").notNull(),
+    content: text("content").notNull(),
+    comment: text("comment"),
+    position: jsonb("position").$type<{
+      boundingRect: any;
+      rects: any[];
+      pageNumber: number;
+    }>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userNodeHighlightUnique: uniqueIndex("highlights_user_node_content_unique").on(table.userId, table.nodeId, table.content),
+  }),
+);
+
 export type GraphState = typeof graphStates.$inferSelect;
 export type NewGraphState = typeof graphStates.$inferInsert;
 export type AbyssalGardenState = typeof abyssalGardenStates.$inferSelect;
@@ -164,4 +186,6 @@ export type VerificationToken = typeof verificationTokens.$inferSelect;
 export type NewVerificationToken = typeof verificationTokens.$inferInsert;
 export type PdfSummary = typeof pdfSummaries.$inferSelect;
 export type NewPdfSummary = typeof pdfSummaries.$inferInsert;
+export type Highlight = typeof highlights.$inferSelect;
+export type NewHighlight = typeof highlights.$inferInsert;
 
