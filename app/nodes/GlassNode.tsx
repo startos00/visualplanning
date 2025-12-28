@@ -6,6 +6,7 @@ import type { NodeProps } from "reactflow";
 import { Handle, Position } from "reactflow";
 import type { GrimpoNodeData, ModeSetting, NodeKind } from "@/app/lib/graph";
 import ReactMarkdown from "react-markdown";
+import { AbyssalCheckbox } from "../components/ui/AbyssalCheckbox";
 
 type EffectiveMode = Exclude<ModeSetting, "auto">;
 
@@ -383,16 +384,18 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
           </div>
           <div className="flex items-center gap-2">
             {/* Deadline date input */}
-            <input
-              type="date"
-              value={data.deadline ?? ""}
-              onChange={(e) => {
-                const value = e.target.value || undefined;
-                data.onUpdate?.(id, { deadline: value });
-              }}
-              className="h-6 rounded border-0 bg-transparent px-1 text-xs text-white opacity-60 transition-opacity hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-1 focus:ring-cyan-300/50"
-              title="Set deadline"
-            />
+            <div className="relative flex items-center">
+              <input
+                type="date"
+                value={data.deadline ?? ""}
+                onChange={(e) => {
+                  const value = e.target.value || undefined;
+                  data.onUpdate?.(id, { deadline: value });
+                }}
+                className="h-7 rounded-full border border-cyan-300/15 bg-slate-950/30 px-3 text-[10px] text-cyan-50/80 outline-none transition-all hover:bg-slate-950/50 hover:border-cyan-300/30 focus:border-cyan-300/50 focus:ring-1 focus:ring-cyan-300/20"
+                title="Set deadline"
+              />
+            </div>
             {type === "resource" && !titleOnly && data.link ? (
               <button
                 onClick={() => window.open(data.link, "_blank", "noopener,noreferrer")}
@@ -716,23 +719,19 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
 
             {type === "tactical" ? (
               <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 text-sm text-cyan-100/80">
-                  <input
-                    type="checkbox"
-                    checked={data.status === "done"}
-                    onChange={(e) => {
-                      const wasDone = data.status === "done";
-                      const isNowDone = e.target.checked;
-                      data.onUpdate?.(id, { status: isNowDone ? "done" : "todo" });
-                      // Trigger octopus celebration only when marking as done (not when unchecking)
-                      if (!wasDone && isNowDone) {
-                        data.onTaskDone?.(id);
-                      }
-                    }}
-                    className="h-4 w-4 accent-cyan-300"
-                  />
-                  Done
-                </label>
+                <AbyssalCheckbox
+                  label="Done"
+                  checked={data.status === "done"}
+                  onChange={(checked) => {
+                    const wasDone = data.status === "done";
+                    const isNowDone = checked;
+                    data.onUpdate?.(id, { status: isNowDone ? "done" : "todo" });
+                    // Trigger octopus celebration only when marking as done (not when unchecking)
+                    if (!wasDone && isNowDone) {
+                      data.onTaskDone?.(id);
+                    }
+                  }}
+                />
                 <button
                   onClick={() => {
                     if (swallowing) return;

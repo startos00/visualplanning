@@ -27,6 +27,40 @@ body {
   margin: 0;
 }
 
+/* Custom Abyssal Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.3);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(34, 211, 238, 0.2);
+  border-radius: 10px;
+  border: 1px solid rgba(34, 211, 238, 0.1);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(34, 211, 238, 0.4);
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.3);
+}
+
+/* Specific scrollbar for firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(34, 211, 238, 0.2) rgba(15, 23, 42, 0.3);
+}
+
+/* Global Focus Ring */
+:focus-visible {
+  outline: 2px solid rgba(34, 211, 238, 0.5);
+  outline-offset: 2px;
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.3);
+}
+
 html,
 body {
   height: 100%;
@@ -633,26 +667,6 @@ input:-webkit-autofill:active {
   border-radius: inherit;
   pointer-events: none;
   /* Suggest treasure glowing within */
-}
-
-/* Custom scrollbar styling for Abyssal Garden */
-.overflow-y-auto::-webkit-scrollbar {
-  width: 8px;
-}
-
-.overflow-y-auto::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.3);
-  border-radius: 4px;
-}
-
-.overflow-y-auto::-webkit-scrollbar-thumb {
-  background: rgba(34, 211, 238, 0.3);
-  border-radius: 4px;
-  border: 1px solid rgba(34, 211, 238, 0.1);
-}
-
-.overflow-y-auto::-webkit-scrollbar-thumb:hover {
-  background: rgba(34, 211, 238, 0.5);
 }
 
 /* Seaweed: Flowing, organic form with subtle green/cyan neon glow */

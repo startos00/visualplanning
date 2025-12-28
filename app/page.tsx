@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, use } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -33,7 +33,15 @@ import { DecompressionOverlay } from "@/app/components/auth/DecompressionOverlay
 const memoizedNodeTypes = nodeTypes;
 const memoizedEdgeTypes = {};
 
-export default function Home() {
+export default function Home(props: {
+  params: Promise<any>;
+  searchParams: Promise<any>;
+}) {
+  // Explicitly unwrap promises to avoid Next.js 15+ synchronous access errors
+  // when props are enumerated by dev tools/extensions.
+  use(props.params);
+  use(props.searchParams);
+
   const router = useRouter();
   const seeded = seedGraph();
   const [nodes, setNodes, onNodesChange] = useNodesState(seeded.nodes);

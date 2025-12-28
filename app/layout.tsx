@@ -17,11 +17,12 @@ export const metadata: Metadata = {
   description: "A deep-sea canvas for strategy, execution, and research (local-only prototype).",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
+export default async function RootLayout(props: {
   children: React.ReactNode;
-}>) {
+  params: Promise<any>;
+}) {
+  const params = await props.params;
+  const { children } = props;
   return (
     <html lang="en">
       <body

@@ -2,7 +2,13 @@ import { SignInForm } from "@/app/components/auth/SignInForm";
 import { DeepSeaBackground } from "@/app/components/auth/DeepSeaBackground";
 import { DumboOctopusCornerLogo } from "@/app/components/DumboOctopusCornerLogo";
 
-export default function LoginPage() {
+export default async function LoginPage(props: {
+  params: Promise<any>;
+  searchParams: Promise<any>;
+}) {
+  await props.params;
+  await props.searchParams;
+
   return (
     <main className="relative min-h-screen w-full flex items-center justify-center p-4 bg-black overflow-hidden">
       <DumboOctopusCornerLogo corner="top-left" href="/" size={48} inset={16} />
