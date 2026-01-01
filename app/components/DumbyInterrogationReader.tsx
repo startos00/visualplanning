@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { X, Send, Lightbulb, CheckSquare, AlertCircle } from "lucide-react";
+import { X, Send, Lightbulb, CheckSquare, AlertCircle, MessageSquare, List } from "lucide-react";
 import { useChat, Chat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
+import ReactMarkdown from "react-markdown";
 import { getHighlights, addHighlight } from "@/app/actions/highlights";
 import type { Highlight } from "@/app/lib/db/schema";
 
@@ -36,11 +38,30 @@ export function DumbyInterrogationReader({
   onExtractTask,
 }: DumbyInterrogationReaderProps) {
   const [isMounted, setIsMounted] = useState(false);
+  const [mountPdfViewer, setMountPdfViewer] = useState(true);
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [selectedText, setSelectedText] = useState<string>("");
   const [pendingIntent, setPendingIntent] = useState<InterrogateIntent | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [focusedSnippet, setFocusedSnippet] = useState<string>("");
+  const [focusedHighlightId, setFocusedHighlightId] = useState<string | null>(null);
+  const [activeSidebarTab, setActiveSidebarTab] = useState<"chat" | "snippets">("chat");
+  const scrollViewerTo = useRef<((highlight: any) => void) | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  function HighlightPopupContent(props: {
+    text: string;
+    // react-pdf-highlighter TipContainer injects these props into children via cloneElement
+    onUpdate?: () => void;
+    popup?: any;
+  }) {
+    // Intentionally ignore onUpdate/popup so they don't end up as invalid DOM props
+    return (
+      <div className="rounded bg-slate-900 p-2 text-xs text-white">
+        {props.text}
+      </div>
+    );
+  }
 
   function normalizePdfHighlighterPosition(raw: any) {
     if (!raw || typeof raw !== "object") return null;
@@ -81,6 +102,33 @@ export function DumbyInterrogationReader({
   // Note: react-pdf-highlighter handles pdfjs setup internally using its own bundled version (4.4.168)
   // We don't need to configure it manually - just let it handle everything
 
+  // react-pdf-highlighter currently doesn't remove its per-page highlight layer containers on unmount.
+  // In React StrictMode dev (double-mount), those leftover DOM nodes cause:
+  // "createRoot() on a container that has already been passed to createRoot()".
+  // Cleaning them up on unmount prevents the warning and avoids stale layers.
+  useEffect(() => {
+    return () => {
+      const scope: ParentNode = containerRef.current ?? document;
+      scope
+        .querySelectorAll?.(".PdfHighlighter__highlight-layer")
+        ?.forEach((el) => el.parentNode?.removeChild(el));
+    };
+  }, []);
+
+  // Prevent "createRoot() called twice" by ensuring any old highlight-layer containers are removed
+  // BEFORE mounting PdfHighlighter. (Some versions of react-pdf-highlighter reuse DOM nodes across mounts.)
+  useEffect(() => {
+    const scope: ParentNode = containerRef.current ?? document;
+    scope
+      .querySelectorAll?.(".PdfHighlighter__highlight-layer")
+      ?.forEach((el) => el.parentNode?.removeChild(el));
+
+    // Unmount + remount viewer next tick so PdfHighlighter creates fresh containers
+    setMountPdfViewer(false);
+    const t = window.setTimeout(() => setMountPdfViewer(true), 0);
+    return () => window.clearTimeout(t);
+  }, [pdfUrl]);
+
   // Clear error when PDF URL changes (new PDF being loaded)
   useEffect(() => {
     setPdfError(null);
@@ -109,52 +157,28 @@ export function DumbyInterrogationReader({
     }
   }, [pdfUrl]);
 
-  // Chat hook for Dumby interrogation - using Chat class with custom transport
+  // Refs to keep track of focused snippet and intent for the transport
+  const focusedSnippetRef = useRef(focusedSnippet);
+  const pendingIntentRef = useRef(pendingIntent);
+
+  useEffect(() => {
+    focusedSnippetRef.current = focusedSnippet;
+  }, [focusedSnippet]);
+
+  useEffect(() => {
+    pendingIntentRef.current = pendingIntent;
+  }, [pendingIntent]);
+
+  // Chat hook for Dumby interrogation - using Chat class with DefaultChatTransport
   const [chat] = useState(() => {
-    const transport: any = {
-      async sendMessages({ messages, body: requestBody, ...options }: any) {
-        const toWireContent = (m: any): string => {
-          if (typeof m?.content === "string") return m.content;
-          const parts = m?.parts;
-          if (Array.isArray(parts)) {
-            return parts
-              .map((p: any) => (typeof p?.text === "string" ? p.text : ""))
-              .filter(Boolean)
-              .join("\n");
-          }
-          return "";
-        };
-
-        const wireMessages = (Array.isArray(messages) ? messages : [])
-          .map((m: any) => ({
-            role: m?.role === "assistant" ? "assistant" : "user",
-            content: toWireContent(m),
-          }))
-          .filter((m: any) => typeof m.content === "string" && m.content.trim().length > 0);
-
-        const response = await fetch("/api/chat/dumby-interrogate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            messages: wireMessages,
-            // Prefer per-request body (avoids stale closures from the Chat transport initializer)
-            context: (requestBody as any)?.context ?? "",
-            intent: (requestBody as any)?.intent ?? "GENERAL",
-            ...(requestBody as object),
-          }),
-          signal: options.abortSignal,
-        });
-        if (!response.ok) {
-          const err = await response.json().catch(() => null);
-          throw new Error(err?.error || `Chat request failed (${response.status})`);
-        }
-        if (!response.body) throw new Error("No response body");
-        return response.body as ReadableStream<any>;
-      },
-      async reconnectToStream() {
-        return null;
-      },
-    };
+    const transport = new DefaultChatTransport({
+      api: "/api/chat/dumby-interrogate",
+      body: () => ({
+        context: focusedSnippetRef.current,
+        intent: pendingIntentRef.current || "GENERAL",
+        documentTitle: nodeTitle || "Unknown PDF",
+      }),
+    });
     return new Chat({ transport });
   });
   
@@ -162,13 +186,33 @@ export function DumbyInterrogationReader({
   const { messages, sendMessage, status } = chatHelpers;
   const [input, setInput] = useState("");
   const isLoading = status === "streaming";
+  const [chatError, setChatError] = useState<string>("");
+
+  const safeSendMessage = useCallback(
+    async (message: any, options?: any) => {
+      setChatError("");
+      try {
+        await sendMessage(message, options);
+      } catch (e) {
+        const msg =
+          typeof (e as any)?.message === "string" && (e as any).message.trim()
+            ? (e as any).message
+            : "Dumby failed to respond (check API keys / auth).";
+        setChatError(msg);
+      }
+    },
+    [sendMessage],
+  );
 
   // Handle context menu actions
   const handleExplain = useCallback((text: string) => {
     if (!text) return;
     setSelectedText(text);
+    setFocusedSnippet(text);
+    setFocusedHighlightId(null);
     setPendingIntent("EXPLAIN");
-    sendMessage({
+    setActiveSidebarTab("chat");
+    void safeSendMessage({
       role: "user",
       parts: [{ type: "text", text: `Dumby, explain this text like I'm 5: ${text}` }],
     } as any, {
@@ -177,7 +221,7 @@ export function DumbyInterrogationReader({
         intent: "EXPLAIN",
       },
     });
-  }, [sendMessage]);
+  }, [safeSendMessage]);
 
   const handleExtractTask = useCallback((text: string) => {
     if (!text || !onExtractTask) return;
@@ -189,8 +233,11 @@ export function DumbyInterrogationReader({
   const handleCritique = useCallback((text: string) => {
     if (!text) return;
     setSelectedText(text);
+    setFocusedSnippet(text);
+    setFocusedHighlightId(null);
     setPendingIntent("CRITIQUE");
-    sendMessage({
+    setActiveSidebarTab("chat");
+    void safeSendMessage({
       role: "user",
       parts: [{ type: "text", text: `Dumby, interrogate this claim: ${text}` }],
     } as any, {
@@ -199,7 +246,7 @@ export function DumbyInterrogationReader({
         intent: "CRITIQUE",
       },
     });
-  }, [sendMessage]);
+  }, [safeSendMessage]);
 
   // Save highlight
   const handleSaveHighlight = useCallback(async (content: string, position: any) => {
@@ -209,6 +256,13 @@ export function DumbyInterrogationReader({
       // Reload highlights
       const loaded = await getHighlights(nodeId);
       setHighlights(loaded);
+
+      // Set the newly saved highlight as focused
+      const newHighlight = loaded.find(h => h.content === content);
+      if (newHighlight) {
+        setFocusedHighlightId(newHighlight.id);
+        setFocusedSnippet(newHighlight.content);
+      }
     } catch (error) {
       console.error("Failed to save highlight:", error);
     }
@@ -221,9 +275,9 @@ export function DumbyInterrogationReader({
       if (!input.trim()) return;
 
       const currentIntent = pendingIntent || "GENERAL";
-      const currentContext = selectedText || "";
+      const currentContext = focusedSnippet || "";
 
-      sendMessage({
+      void safeSendMessage({
         role: "user",
         parts: [{ type: "text", text: input }],
       } as any, {
@@ -235,7 +289,7 @@ export function DumbyInterrogationReader({
       
       setInput("");
     },
-    [input, selectedText, pendingIntent, sendMessage]
+    [input, focusedSnippet, pendingIntent, safeSendMessage]
   );
 
   if (!isMounted) return null;
@@ -273,8 +327,13 @@ export function DumbyInterrogationReader({
             ref={containerRef}
             style={{ height: '100%', minHeight: 0 }}
           >
-            <PdfLoader
-              url={pdfUrl} 
+            {!mountPdfViewer ? (
+              <div className="flex h-full items-center justify-center text-orange-200">
+                Initializing PDF viewer…
+              </div>
+            ) : (
+              <PdfLoader
+                url={pdfUrl}
                 beforeLoad={
                   <div className="flex h-full items-center justify-center text-orange-200">
                     {pdfError ? (
@@ -292,18 +351,21 @@ export function DumbyInterrogationReader({
                   setPdfError(error?.message || "Unknown error loading PDF");
                 }}
               >
-              {(pdfDocument) => {
-                // PDF loaded successfully - error will be cleared by onError handler if needed
-                return (
-                  <PdfHighlighter
-                    pdfDocument={pdfDocument}
-                    enableAreaSelection={(event) => event.altKey}
-                    onScrollChange={() => {}}
-                    scrollRef={() => {}}
-                  onSelectionFinished={(position, content, hideTipAndSelection, transformSelection) => {
+                {(pdfDocument) => {
+                  return (
+                    <PdfHighlighter
+                      pdfDocument={pdfDocument}
+                      enableAreaSelection={(event) => event.altKey}
+                      onScrollChange={() => {}}
+                      scrollRef={(scrollTo) => {
+                        scrollViewerTo.current = scrollTo;
+                      }}
+                      onSelectionFinished={(position, content, hideTipAndSelection, transformSelection) => {
                     const selectedTextContent = content.text || "";
-                    // Update selected text state for context in manual chat
+                    // Update states for context in manual chat and visual synchronization
                     setSelectedText(selectedTextContent);
+                    setFocusedSnippet(selectedTextContent);
+                    setFocusedHighlightId(null);
                     
                     const tipContent = (
                       <div className="flex flex-col gap-1 rounded-xl border border-orange-500/30 bg-slate-950/95 p-2 shadow-[0_0_24px_rgba(249,115,22,0.4)] backdrop-blur-md">
@@ -362,8 +424,8 @@ export function DumbyInterrogationReader({
                         children={tipContent}
                       />
                     );
-                  }}
-                  highlightTransform={(
+                      }}
+                      highlightTransform={(
                     highlight,
                     index,
                     setTip,
@@ -391,17 +453,44 @@ export function DumbyInterrogationReader({
                       />
                     );
 
+                    const isFocused = focusedHighlightId === highlight.id;
+                    const highlightIndex = highlights.findIndex(h => h.id === highlight.id);
+                    const displayIndex = highlightIndex !== -1 ? highlightIndex + 1 : null;
+
                     return (
-                      <Popup
+                      <div
                         key={index}
-                        onMouseOver={(popupContent) =>
-                          setTip(highlight, (highlight) => popupContent)
-                        }
-                        onMouseOut={hideTip}
-                        popupContent={<div className="rounded bg-slate-900 p-2 text-xs text-white">{highlight.comment?.text || "Saved Highlight"}</div>}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFocusedSnippet(highlight.content?.text || "");
+                          setFocusedHighlightId(highlight.id);
+                        }}
+                        className={`group relative cursor-pointer transition-all ${
+                          isFocused ? "z-10" : "hover:z-10"
+                        }`}
                       >
-                        {component}
-                      </Popup>
+                        {isFocused && (
+                          <div className="pointer-events-none absolute -inset-1 rounded border border-orange-500/50 bg-orange-500/5 shadow-[0_0_12px_rgba(249,115,22,0.3)]" />
+                        )}
+                        {displayIndex !== null && (
+                          <div className="absolute -left-6 top-0 flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-[10px] font-bold text-white shadow-lg transition-transform group-hover:scale-110">
+                            {displayIndex}
+                          </div>
+                        )}
+                        <Popup
+                          onMouseOver={(popupContent) =>
+                            setTip(highlight, (highlight) => popupContent)
+                          }
+                          onMouseOut={hideTip}
+                          popupContent={
+                            <HighlightPopupContent
+                              text={highlight.comment?.text || "Saved Highlight"}
+                            />
+                          }
+                        >
+                          {component}
+                        </Popup>
+                      </div>
                     );
                   }}
                   highlights={highlights.flatMap((h) => {
@@ -417,87 +506,217 @@ export function DumbyInterrogationReader({
                     ];
                   })}
                 />
-                );
-              }}
-            </PdfLoader>
+                  );
+                }}
+              </PdfLoader>
+            )}
           </div>
 
           {/* Right Pane: Dumby Chat (30%) */}
           <div className="flex w-full flex-col bg-gradient-to-b from-orange-950/30 to-slate-900 md:w-[30%]">
-            {/* Chat Header */}
-            <div className="border-b border-orange-500/20 px-4 py-3">
-              <div className="text-xs tracking-widest text-orange-400/80">DUMBY_ANALYSIS_PROTOCOL</div>
-              <div className="mt-1 text-sm text-orange-100/70">
-                Select text in the PDF to analyze
+            {/* Sidebar Tabs */}
+            <div className="flex border-b border-orange-500/20 bg-slate-950/40">
+              <button
+                onClick={() => setActiveSidebarTab("chat")}
+                className={`flex flex-1 items-center justify-center gap-2 py-3 text-xs font-bold uppercase tracking-wider transition-all ${
+                  activeSidebarTab === "chat"
+                    ? "bg-orange-500/10 text-orange-400 shadow-[inset_0_-2px_0_rgba(249,115,22,1)]"
+                    : "text-orange-100/40 hover:bg-orange-500/5 hover:text-orange-100/60"
+                }`}
+              >
+                <MessageSquare className="h-3.5 w-3.5" />
+                Interrogate
+              </button>
+              <button
+                onClick={() => setActiveSidebarTab("snippets")}
+                className={`flex flex-1 items-center justify-center gap-2 py-3 text-xs font-bold uppercase tracking-wider transition-all ${
+                  activeSidebarTab === "snippets"
+                    ? "bg-orange-500/10 text-orange-400 shadow-[inset_0_-2px_0_rgba(249,115,22,1)]"
+                    : "text-orange-100/40 hover:bg-orange-500/5 hover:text-orange-100/60"
+                }`}
+              >
+                <List className="h-3.5 w-3.5" />
+                Snippets ({highlights.length})
+              </button>
+            </div>
+
+            {activeSidebarTab === "chat" ? (
+              <>
+                {/* Chat Header */}
+                <div className="border-b border-orange-500/20 px-4 py-3">
+                  <div className="text-xs tracking-widest text-orange-400/80">DUMBY_ANALYSIS_PROTOCOL</div>
+                  <div className="mt-1 text-sm text-orange-100/70">
+                    Select text in the PDF to analyze
+                  </div>
+                    {chatError ? (
+                      <div className="mt-2 rounded-lg border border-red-500/30 bg-red-950/30 p-2 text-xs text-red-200">
+                        {chatError}
+                      </div>
+                    ) : null}
+                </div>
+
+                {/* Context Banner */}
+                {focusedSnippet && (
+                  <div className="border-b border-orange-500/10 bg-orange-500/5 px-4 py-2 flex items-center justify-between gap-3">
+                    <div className="flex-1 overflow-hidden">
+                      <div className="text-[10px] uppercase tracking-tighter text-orange-400/60 font-bold mb-0.5 flex items-center gap-1">
+                        <div className="h-1 w-1 rounded-full bg-orange-500 animate-pulse" />
+                        Focused Context
+                      </div>
+                      <div className="text-xs text-orange-100/80 truncate italic">
+                        &quot;{focusedSnippet}&quot;
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setFocusedSnippet("");
+                        setFocusedHighlightId(null);
+                      }}
+                      className="rounded-lg bg-orange-500/10 p-1.5 text-orange-400 hover:bg-orange-500/20 transition-all hover:scale-110 active:scale-95"
+                      title="Clear context"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Messages */}
+                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+                  {messages.length === 0 && (
+                    <div className="rounded-xl border border-orange-500/20 bg-slate-950/40 p-4 text-sm text-orange-100/70">
+                      <p className="mb-2 font-semibold text-orange-200">Welcome to Dumby&apos;s Interrogation Room</p>
+                      <p>Select text in the PDF and choose an action:</p>
+                      <ul className="mt-2 ml-4 list-disc space-y-1">
+                        <li><strong>Explain This:</strong> Simplify complex jargon</li>
+                        <li><strong>Extract Task:</strong> Create a task node on the canvas</li>
+                        <li><strong>Critique:</strong> Check for logical fallacies</li>
+                      </ul>
+                    </div>
+                  )}
+
+                  {messages.map((message) => (
+                    <div
+                      key={message.id}
+                      className={`rounded-xl border p-3 ${
+                        message.role === "user"
+                          ? "border-orange-500/20 bg-orange-950/20 ml-8"
+                          : "border-orange-500/30 bg-slate-950/60 mr-8"
+                      }`}
+                    >
+                      <div className="text-xs font-semibold text-orange-300/80 mb-1">
+                        {message.role === "user" ? "You" : "Dumby"}
+                      </div>
+                      <div className="text-sm text-orange-50/90 max-w-none">
+                        <ReactMarkdown
+                          components={{
+                            p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                            ul: ({ children }) => <ul className="mb-2 ml-4 list-disc space-y-1">{children}</ul>,
+                            ol: ({ children }) => <ol className="mb-2 ml-4 list-decimal space-y-1">{children}</ol>,
+                            li: ({ children }) => <li className="pl-1">{children}</li>,
+                            strong: ({ children }) => <strong className="font-bold text-orange-300">{children}</strong>,
+                            code: ({ children }) => <code className="rounded bg-orange-950/40 px-1 py-0.5 font-mono text-xs">{children}</code>,
+                            pre: ({ children }) => <pre className="mb-2 overflow-x-auto rounded bg-orange-950/40 p-2 font-mono text-xs">{children}</pre>,
+                          }}
+                        >
+                          {(() => {
+                            const msg = message as any;
+                            if (typeof msg.content === "string") return msg.content;
+                            if (Array.isArray(msg.parts)) {
+                              // Only join text parts to avoid protocol JSON in the UI
+                              return msg.parts
+                                .map((p: any) => (p.type === "text" ? p.text : ""))
+                                .filter(Boolean)
+                                .join("");
+                            }
+                            return "";
+                          })()}
+                        </ReactMarkdown>
+                      </div>
+                    </div>
+                  ))}
+
+                  {isLoading && (
+                    <div className="rounded-xl border border-orange-500/30 bg-slate-950/60 p-3 mr-8">
+                      <div className="text-xs font-semibold text-orange-300/80 mb-1">Dumby</div>
+                      <div className="text-sm text-orange-100/70">Analyzing...</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Input */}
+                <div className="border-t border-orange-500/20 p-4">
+                  <form onSubmit={handleChatSubmit} className="flex gap-2">
+                    <input
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      placeholder="Ask Dumby about the selected text..."
+                      className="flex-1 rounded-lg border border-orange-500/20 bg-slate-950/60 px-3 py-2 text-sm text-orange-50 placeholder:text-orange-300/40 outline-none focus:border-orange-500/40"
+                      disabled={isLoading}
+                    />
+                    <button
+                      type="submit"
+                      disabled={isLoading || !input.trim()}
+                      className="rounded-lg border border-orange-500/30 bg-orange-950/40 px-4 py-2 text-orange-100 transition-all hover:bg-orange-950/60 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Send className="h-4 w-4" />
+                    </button>
+                  </form>
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+                {highlights.length === 0 ? (
+                  <div className="rounded-xl border border-orange-500/10 bg-slate-950/40 p-6 text-center text-sm text-orange-100/40">
+                    No snippets saved yet. Select text in the PDF and click &quot;Save Highlight&quot; to begin your collection.
+                  </div>
+                ) : (
+                  highlights.map((h, i) => (
+                    <div
+                      key={h.id}
+                      onClick={() => {
+                        setFocusedSnippet(h.content);
+                        setFocusedHighlightId(h.id);
+                        setActiveSidebarTab("chat"); // Switch to chat to interrogate
+                        
+                        // Scroll to highlight
+                        if (scrollViewerTo.current) {
+                          const position = normalizePdfHighlighterPosition(h.position);
+                          if (position) {
+                            scrollViewerTo.current({
+                              id: h.id,
+                              content: { text: h.content },
+                              position,
+                            });
+                          }
+                        }
+                      }}
+                      className={`group cursor-pointer rounded-xl border p-3 transition-all ${
+                        focusedHighlightId === h.id
+                          ? "border-orange-500/50 bg-orange-500/10"
+                          : "border-orange-500/10 bg-slate-950/40 hover:border-orange-500/30 hover:bg-slate-950/60"
+                      }`}
+                    >
+                      <div className="mb-2 flex items-center justify-between">
+                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-[10px] font-bold text-white shadow-lg">
+                          {i + 1}
+                        </div>
+                        <div className="text-[10px] font-bold uppercase tracking-tighter text-orange-400/40 group-hover:text-orange-400/60 transition-colors">
+                          P.{ (h.position as any)?.pageNumber || 1 }
+                        </div>
+                      </div>
+                      <div className="text-xs text-orange-50/80 line-clamp-3 italic">
+                        &quot;{h.content}&quot;
+                      </div>
+                      {h.comment && (
+                        <div className="mt-2 border-t border-orange-500/10 pt-2 text-[11px] text-orange-300/70">
+                          {h.comment}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
-            </div>
-
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-              {messages.length === 0 && (
-                <div className="rounded-xl border border-orange-500/20 bg-slate-950/40 p-4 text-sm text-orange-100/70">
-                  <p className="mb-2 font-semibold text-orange-200">Welcome to Dumby&apos;s Interrogation Room</p>
-                  <p>Select text in the PDF and choose an action:</p>
-                  <ul className="mt-2 ml-4 list-disc space-y-1">
-                    <li><strong>Explain This:</strong> Simplify complex jargon</li>
-                    <li><strong>Extract Task:</strong> Create a task node on the canvas</li>
-                    <li><strong>Critique:</strong> Check for logical fallacies</li>
-                  </ul>
-                </div>
-              )}
-
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`rounded-xl border p-3 ${
-                    message.role === "user"
-                      ? "border-orange-500/20 bg-orange-950/20 ml-8"
-                      : "border-orange-500/30 bg-slate-950/60 mr-8"
-                  }`}
-                >
-                  <div className="text-xs font-semibold text-orange-300/80 mb-1">
-                    {message.role === "user" ? "You" : "Dumby"}
-                  </div>
-                  <div className="text-sm text-orange-50/90 whitespace-pre-wrap">
-                    {(() => {
-                      const msg = message as any;
-                      if (typeof msg.content === 'string') return msg.content;
-                      if (Array.isArray(msg.parts)) {
-                        return msg.parts.map((p: any) => p.text || JSON.stringify(p)).join('\n');
-                      }
-                      return JSON.stringify(msg);
-                    })()}
-                  </div>
-                </div>
-              ))}
-
-              {isLoading && (
-                <div className="rounded-xl border border-orange-500/30 bg-slate-950/60 p-3 mr-8">
-                  <div className="text-xs font-semibold text-orange-300/80 mb-1">Dumby</div>
-                  <div className="text-sm text-orange-100/70">Analyzing...</div>
-                </div>
-              )}
-            </div>
-
-            {/* Input */}
-            <div className="border-t border-orange-500/20 p-4">
-              <form onSubmit={handleChatSubmit} className="flex gap-2">
-                <input
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Ask Dumby about the selected text..."
-                  className="flex-1 rounded-lg border border-orange-500/20 bg-slate-950/60 px-3 py-2 text-sm text-orange-50 placeholder:text-orange-300/40 outline-none focus:border-orange-500/40"
-                  disabled={isLoading}
-                />
-                <button
-                  type="submit"
-                  disabled={isLoading || !input.trim()}
-                  className="rounded-lg border border-orange-500/30 bg-orange-950/40 px-4 py-2 text-orange-100 transition-all hover:bg-orange-950/60 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Send className="h-4 w-4" />
-                </button>
-              </form>
-            </div>
+            )}
           </div>
         </div>
       </div>

@@ -14,20 +14,22 @@ type InterrogateBody = {
   messages: Array<{ role: "user" | "assistant"; content?: string } | any>;
   context?: string; // The highlighted text snippet (optional)
   intent: InterrogateIntent;
+  documentTitle?: string;
 };
 
-function buildSystemPrompt(intent: InterrogateIntent): string {
-  const basePersona = "You are Dumby, an efficient Knowledge Manager.";
+function buildSystemPrompt(intent: InterrogateIntent, documentTitle?: string): string {
+  const docInfo = documentTitle ? ` You are currently analyzing the document: "${documentTitle}".` : "";
+  const basePersona = `You are Dumby, an efficient Knowledge Manager.${docInfo} You have access to a "Focused Context" snippet from the document, which the user has highlighted or clicked.`;
   
   switch (intent) {
     case "EXPLAIN":
-      return `${basePersona} Your role is to simplify jargon and complex concepts using ELI5 (Explain Like I'm 5) style. Break down technical terms, academic language, and complex ideas into simple, clear explanations that anyone can understand. Use analogies and everyday examples when helpful.`;
+      return `${basePersona} Your role is to simplify jargon and complex concepts from the "Focused Context" using ELI5 (Explain Like I'm 5) style. Break down technical terms and complex ideas into simple, clear explanations. If the user's question isn't directly related to the snippet, answer using your general knowledge but mention that it wasn't in the specific focused section.`;
     
     case "CRITIQUE":
-      return `${basePersona} Your role is to critically analyze claims and check for:\n- Logical fallacies (ad hominem, strawman, false cause, etc.)\n- Vague or ambiguous language\n- Unsupported assertions without evidence\n- Missing context or incomplete information\n- Potential biases or assumptions\n\nBe direct, thorough, and constructive in your analysis. Point out weaknesses but also acknowledge strengths when present.`;
+      return `${basePersona} Your role is to critically analyze claims within the "Focused Context" and check for logical fallacies, vague language, or unsupported assertions. Point out weaknesses but also acknowledge strengths. If the user asks about something else, clarify that you are focusing on the specific section of "${documentTitle || "the document"}" they have focused on.`;
     
     case "GENERAL":
-      return `${basePersona} Answer the user's specific questions about the highlighted text snippet. Be concise, accurate, and helpful. Focus on what the user is asking rather than providing unnecessary context.`;
+      return `${basePersona} Answer the user's questions about the "Focused Context" snippet. Be concise and accurate. If the user asks about something not in the snippet, use your general knowledge but clarify that this info wasn't in the specific highlighted section of "${documentTitle || "the document"}". You represent an assistant that is actively reading this document with the user and sees exactly what they focus on.`;
     
     default:
       return basePersona;
@@ -59,13 +61,14 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json()) as Partial<InterrogateBody>;
-    const { messages, context, intent } = body;
+    const { messages, context, intent, documentTitle } = body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json({ error: "Missing or invalid messages" }, { status: 400 });
     }
 
     const contextText = typeof context === "string" ? context.trim() : "";
+    console.log(`Dumby Interrogate: document="${documentTitle}", contextLength=${contextText.length}, intent=${intent}`);
 
     const validIntent: InterrogateIntent = intent === "EXPLAIN" || intent === "CRITIQUE" ? intent : "GENERAL";
     const provider = getProvider();
@@ -92,7 +95,7 @@ export async function POST(request: Request) {
     }
 
     // Build the system prompt
-    const systemPrompt = buildSystemPrompt(validIntent);
+    const systemPrompt = buildSystemPrompt(validIntent, documentTitle);
 
     // Normalize messages coming from the client (supports both {content} and {parts} shapes)
     const normalizedMessages = messages
@@ -147,14 +150,15 @@ export async function POST(request: Request) {
     }
 
     // Stream the response
-    const result = streamText({
+    const result = await streamText({
       model,
       system: systemPrompt,
       messages: enhancedMessages as any,
       maxTokens: 1000,
     });
 
-    return result.toDataStreamResponse();
+    // Return UI message stream response - this is what useChat expects
+    return result.toUIMessageStreamResponse();
   } catch (error) {
     console.error("Dumby interrogate error:", error);
     
