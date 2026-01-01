@@ -1,6 +1,6 @@
 ## Grimpo Lite
 
-A **visual prototype**: a deep-sea canvas where you can map a project at **Strategic (big picture)** and **Tactical (execution)** levels, plus **Resource (research)** nodes. Everything saves to **localStorage** (no backend).
+A **visual prototype**: a deep-sea canvas where you can map a project at **Strategic (big picture)** and **Tactical (execution)** levels, plus **Resource (research)** nodes. 
 
 ### Why you built it
 I want to solve my anxiety of not getting anything done. I also want to visualise my research, strategy, and execution. Basically the whole project life cycle in one platform.
