@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { X, Send, Lightbulb, CheckSquare, AlertCircle, MessageSquare, List } from "lucide-react";
+import { X, Send, Lightbulb, CheckSquare, AlertCircle, MessageSquare, List, Bookmark, Trash2 } from "lucide-react";
 import { useChat, Chat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import ReactMarkdown from "react-markdown";
-import { getHighlights, addHighlight } from "@/app/actions/highlights";
+import { getHighlights, addHighlight, deleteHighlight } from "@/app/actions/highlights";
 import type { Highlight } from "@/app/lib/db/schema";
 
 // Import from react-pdf-highlighter
@@ -46,22 +46,11 @@ export function DumbyInterrogationReader({
   const [focusedSnippet, setFocusedSnippet] = useState<string>("");
   const [focusedHighlightId, setFocusedHighlightId] = useState<string | null>(null);
   const [activeSidebarTab, setActiveSidebarTab] = useState<"chat" | "snippets">("chat");
+  const [pendingComment, setPendingComment] = useState<string>("");
+  const [isSavingHighlight, setIsSavingHighlight] = useState(false);
   const scrollViewerTo = useRef<((highlight: any) => void) | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  function HighlightPopupContent(props: {
-    text: string;
-    // react-pdf-highlighter TipContainer injects these props into children via cloneElement
-    onUpdate?: () => void;
-    popup?: any;
-  }) {
-    // Intentionally ignore onUpdate/popup so they don't end up as invalid DOM props
-    return (
-      <div className="rounded bg-slate-900 p-2 text-xs text-white">
-        {props.text}
-      </div>
-    );
-  }
+  const commentInputRef = useRef<HTMLTextAreaElement>(null);
 
   function normalizePdfHighlighterPosition(raw: any) {
     if (!raw || typeof raw !== "object") return null;
@@ -249,9 +238,12 @@ export function DumbyInterrogationReader({
   }, [safeSendMessage]);
 
   // Save highlight
-  const handleSaveHighlight = useCallback(async (content: string, position: any) => {
+  const handleSaveHighlight = useCallback(async (content: string, position: any, comment?: string) => {
+    if (isSavingHighlight) return; // Prevent double-clicks
+    
+    setIsSavingHighlight(true);
     try {
-      await addHighlight(nodeId, content, position);
+      await addHighlight(nodeId, content, position, comment);
       
       // Reload highlights
       const loaded = await getHighlights(nodeId);
@@ -263,10 +255,30 @@ export function DumbyInterrogationReader({
         setFocusedHighlightId(newHighlight.id);
         setFocusedSnippet(newHighlight.content);
       }
+      
+      // Clear comment input
+      setPendingComment("");
     } catch (error) {
       console.error("Failed to save highlight:", error);
+    } finally {
+      setIsSavingHighlight(false);
     }
-  }, [nodeId]);
+  }, [nodeId, isSavingHighlight]);
+
+  const handleDeleteHighlight = useCallback(async (id: string) => {
+    try {
+      const result = await deleteHighlight(id);
+      if (result.success) {
+        setHighlights((prev) => prev.filter((h) => h.id !== id));
+        if (focusedHighlightId === id) {
+          setFocusedHighlightId(null);
+          setFocusedSnippet("");
+        }
+      }
+    } catch (error) {
+      console.error("Failed to delete highlight:", error);
+    }
+  }, [focusedHighlightId, deleteHighlight]);
 
   // Handle chat submit with context
   const handleChatSubmit = useCallback(
@@ -296,6 +308,14 @@ export function DumbyInterrogationReader({
 
   return createPortal(
     <div className="fixed inset-0 z-[100] grid place-items-center p-4">
+      <style jsx global>{`
+        .PdfHighlighter__tip-container {
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
+          pointer-events: auto !important;
+        }
+      `}</style>
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-slate-950/95 backdrop-blur-xl"
@@ -366,64 +386,167 @@ export function DumbyInterrogationReader({
                     setSelectedText(selectedTextContent);
                     setFocusedSnippet(selectedTextContent);
                     setFocusedHighlightId(null);
+                    setPendingComment(""); // Reset comment when new selection
+                    
+                    // Focus comment input after a brief delay to ensure it's rendered
+                    setTimeout(() => {
+                      commentInputRef.current?.focus();
+                    }, 100);
                     
                     const tipContent = (
-                      <div className="flex flex-col gap-1 rounded-xl border border-orange-500/30 bg-slate-950/95 p-2 shadow-[0_0_24px_rgba(249,115,22,0.4)] backdrop-blur-md">
-                        <button
-                          onClick={() => {
-                            handleExplain(selectedTextContent);
-                            hideTipAndSelection();
-                          }}
-                          className="flex items-center gap-2 rounded-lg border border-orange-500/20 bg-orange-950/30 px-3 py-2 text-sm text-orange-100 transition-all hover:bg-orange-950/50 hover:shadow-[0_0_12px_rgba(249,115,22,0.3)]"
-                        >
-                          <Lightbulb className="h-4 w-4 text-orange-400" />
-                          🟠 Explain This
-                        </button>
-                        <button
-                          onClick={() => {
-                            handleExtractTask(selectedTextContent);
-                            hideTipAndSelection();
-                          }}
-                          className="flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-950/30 px-3 py-2 text-sm text-green-100 transition-all hover:bg-green-950/50 hover:shadow-[0_0_12px_rgba(34,197,94,0.3)]"
-                        >
-                          <CheckSquare className="h-4 w-4 text-green-400" />
-                          ✅ Extract Task
-                        </button>
-                        <button
-                          onClick={() => {
-                            handleCritique(selectedTextContent);
-                            hideTipAndSelection();
-                          }}
-                          className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-950/30 px-3 py-2 text-sm text-red-100 transition-all hover:bg-red-950/50 hover:shadow-[0_0_12px_rgba(239,68,68,0.3)]"
-                        >
-                          <AlertCircle className="h-4 w-4 text-red-400" />
-                          ❓ Critique / Interrogate
-                        </button>
-                        <button
-                          onClick={() => {
-                            handleSaveHighlight(selectedTextContent, position);
-                            hideTipAndSelection();
-                          }}
-                          className="mt-1 flex items-center gap-2 rounded-lg border border-cyan-500/20 bg-slate-900/50 px-3 py-2 text-xs text-cyan-200 transition-all hover:bg-slate-800"
-                        >
-                          <Send className="h-3 w-3" />
-                          Save Highlight
-                        </button>
+                      <div 
+                        className="flex flex-col overflow-hidden rounded-2xl border border-orange-500/40 bg-slate-950/90 shadow-[0_0_40px_rgba(249,115,22,0.25)] backdrop-blur-xl min-w-[320px] animate-in fade-in zoom-in duration-200"
+                        style={{ pointerEvents: "auto" }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {/* Header: Selection Metadata */}
+                        <div className="flex items-center justify-between border-b border-orange-500/10 bg-orange-500/5 px-4 py-2.5">
+                          <div className="flex items-center gap-2">
+                            <div className="h-1.5 w-1.5 rounded-full bg-orange-500 animate-pulse" />
+                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-orange-400/80">
+                              Active Selection
+                            </span>
+                          </div>
+                          <button 
+                            onClick={hideTipAndSelection}
+                            className="rounded-full p-1 text-orange-400/50 hover:bg-orange-500/10 hover:text-orange-400 transition-colors"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+
+                        <div className="p-4 space-y-4">
+                          {/* Section 1: Interrogation Actions */}
+                          <div>
+                            <label className="mb-2 block text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                              Interrogate with Dumby
+                            </label>
+                            <div className="grid grid-cols-2 gap-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleExplain(selectedTextContent);
+                                  hideTipAndSelection();
+                                }}
+                                className="flex items-center gap-2 rounded-xl border border-orange-500/20 bg-orange-950/20 px-3 py-2.5 text-xs font-semibold text-orange-100 transition-all hover:border-orange-500/40 hover:bg-orange-950/40 active:scale-95"
+                              >
+                                <Lightbulb className="h-4 w-4 text-orange-400" />
+                                Explain
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCritique(selectedTextContent);
+                                  hideTipAndSelection();
+                                }}
+                                className="flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-950/20 px-3 py-2.5 text-xs font-semibold text-red-100 transition-all hover:border-red-500/40 hover:bg-red-950/40 active:scale-95"
+                              >
+                                <AlertCircle className="h-4 w-4 text-red-400" />
+                                Critique
+                              </button>
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleExtractTask(selectedTextContent);
+                                hideTipAndSelection();
+                              }}
+                              className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-green-500/20 bg-green-950/20 px-3 py-2.5 text-xs font-semibold text-green-100 transition-all hover:border-green-500/40 hover:bg-green-950/40 active:scale-95"
+                            >
+                              <CheckSquare className="h-4 w-4 text-green-400" />
+                              Extract to Task Board
+                            </button>
+                          </div>
+
+                          {/* Section 2: Archiving / Saving */}
+                          <div className="pt-2 border-t border-orange-500/10">
+                            <label className="mb-2 block text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                              Archive Snippet
+                            </label>
+                            <div className="space-y-3">
+                              <textarea
+                                ref={commentInputRef}
+                                value={pendingComment}
+                                onChange={(e) => {
+                                  // No need for stopPropagation here as the native capture listener handles it
+                                  setPendingComment(e.target.value);
+                                }}
+                                onKeyDown={(e) => {
+                                  // Keep the Cmd+Enter shortcut
+                                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleSaveHighlight(selectedTextContent, position, pendingComment.trim() || undefined);
+                                    hideTipAndSelection();
+                                  }
+                                }}
+                                placeholder="Add a thought or tag (optional)..."
+                                className="min-h-[70px] w-full resize-none rounded-xl border border-white/5 bg-white/5 px-3 py-2 text-xs text-orange-50 placeholder:text-slate-600 outline-none transition-all focus:border-cyan-500/30 focus:bg-white/10"
+                              />
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSaveHighlight(selectedTextContent, position, pendingComment.trim() || undefined);
+                                    hideTipAndSelection();
+                                  }}
+                                  disabled={isSavingHighlight}
+                                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-3 text-sm font-bold text-white transition-all hover:bg-cyan-500 hover:shadow-[0_0_20px_rgba(6,182,212,0.4)] active:scale-[0.97] disabled:opacity-50"
+                                >
+                                  {isSavingHighlight ? "Saving..." : "Save Highlight"}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Footer Hint */}
+                        <div className="bg-white/5 px-4 py-2 text-center text-[9px] text-slate-500">
+                          Tip: Use <kbd className="rounded bg-slate-800 px-1 font-sans text-slate-300">⌘</kbd> + <kbd className="rounded bg-slate-800 px-1 font-sans text-slate-300">Enter</kbd> to save instantly
+                        </div>
                       </div>
                     );
                     
-                    // Tip component - using render prop pattern
-                    return (
-                      <Tip
-                        onOpen={transformSelection}
-                        onConfirm={(comment) => {
-                          handleSaveHighlight(selectedTextContent, position);
-                          hideTipAndSelection();
-                        }}
-                        // @ts-expect-error - Tip may accept children in runtime even if types don't show it
-                        children={tipContent}
-                      />
-                    );
+                    // Custom Tip implementation to bypass the library's default white box and emojis
+                    const CustomTip = () => {
+                      useEffect(() => {
+                        transformSelection();
+                        
+                        const el = commentInputRef.current;
+                        if (el) {
+                          // Native listener with capture: true is the most aggressive way 
+                          // to stop a library from stealing keystrokes
+                          const stopEvent = (e: Event) => e.stopPropagation();
+                          
+                          el.addEventListener("keydown", stopEvent, true);
+                          el.addEventListener("keyup", stopEvent, true);
+                          el.addEventListener("keypress", stopEvent, true);
+                          el.addEventListener("pointerdown", stopEvent, true);
+                          el.addEventListener("mousedown", stopEvent, true);
+
+                          // Focus after a short delay to allow the library to finish its own positioning/scrolling
+                          const t = setTimeout(() => {
+                            el.focus();
+                            // Optional: clear any existing selection in the textarea and put cursor at end
+                            const val = el.value;
+                            el.value = "";
+                            el.value = val;
+                          }, 150);
+
+                          return () => {
+                            el.removeEventListener("keydown", stopEvent, true);
+                            el.removeEventListener("keyup", stopEvent, true);
+                            el.removeEventListener("keypress", stopEvent, true);
+                            el.removeEventListener("pointerdown", stopEvent, true);
+                            el.removeEventListener("mousedown", stopEvent, true);
+                            clearTimeout(t);
+                          };
+                        }
+                      }, []);
+
+                      return tipContent;
+                    };
+
+                    return <CustomTip />;
                       }}
                       highlightTransform={(
                     highlight,
@@ -483,9 +606,47 @@ export function DumbyInterrogationReader({
                           }
                           onMouseOut={hideTip}
                           popupContent={
-                            <HighlightPopupContent
-                              text={highlight.comment?.text || "Saved Highlight"}
-                            />
+                            <div className="flex flex-col gap-3 rounded-xl border border-orange-500/30 bg-slate-950/95 p-3 shadow-[0_0_24px_rgba(249,115,22,0.4)] backdrop-blur-md min-w-[240px]">
+                              <div className="flex items-center justify-between border-b border-orange-500/10 pb-2">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-orange-400/60">
+                                  Saved Highlight
+                                </span>
+                                <span className="text-[10px] text-slate-500">
+                                  P.{(highlight.position as any)?.pageNumber || 1}
+                                </span>
+                              </div>
+                              {highlight.comment?.text && (
+                                <div className="text-xs text-orange-50/90 italic line-clamp-3">
+                                  &quot;{highlight.comment.text}&quot;
+                                </div>
+                              )}
+                              <div className="flex flex-col gap-2">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setFocusedSnippet(highlight.content?.text || "");
+                                    setFocusedHighlightId(highlight.id);
+                                    setActiveSidebarTab("chat");
+                                    hideTip();
+                                  }}
+                                  className="flex items-center justify-center gap-2 rounded-lg border border-orange-500/20 bg-orange-950/20 px-3 py-2 text-xs font-semibold text-orange-100 transition-all hover:border-orange-500/40 hover:bg-orange-950/40 active:scale-95"
+                                >
+                                  <MessageSquare className="h-3.5 w-3.5 text-orange-400" />
+                                  Interrogate
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteHighlight(highlight.id);
+                                    hideTip();
+                                  }}
+                                  className="flex items-center justify-center gap-2 rounded-lg border border-red-500/20 bg-red-950/20 px-3 py-2 text-xs font-semibold text-red-100 transition-all hover:border-red-500/40 hover:bg-red-950/40 active:scale-95"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                                  Delete / Undo
+                                </button>
+                              </div>
+                            </div>
                           }
                         >
                           {component}
@@ -700,8 +861,20 @@ export function DumbyInterrogationReader({
                         <div className="flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-[10px] font-bold text-white shadow-lg">
                           {i + 1}
                         </div>
-                        <div className="text-[10px] font-bold uppercase tracking-tighter text-orange-400/40 group-hover:text-orange-400/60 transition-colors">
-                          P.{ (h.position as any)?.pageNumber || 1 }
+                        <div className="flex items-center gap-2">
+                          <div className="text-[10px] font-bold uppercase tracking-tighter text-orange-400/40 group-hover:text-orange-400/60 transition-colors">
+                            P.{ (h.position as any)?.pageNumber || 1 }
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteHighlight(h.id);
+                            }}
+                            className="rounded-lg p-1 text-slate-500 hover:bg-red-500/10 hover:text-red-400 transition-all opacity-0 group-hover:opacity-100"
+                            title="Delete snippet"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
                         </div>
                       </div>
                       <div className="text-xs text-orange-50/80 line-clamp-3 italic">
