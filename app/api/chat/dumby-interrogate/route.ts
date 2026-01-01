@@ -11,8 +11,8 @@ export const runtime = "nodejs";
 type InterrogateIntent = "EXPLAIN" | "CRITIQUE" | "GENERAL";
 
 type InterrogateBody = {
-  messages: Array<{ role: "user" | "assistant"; content: string }>;
-  context: string; // The highlighted text snippet
+  messages: Array<{ role: "user" | "assistant"; content?: string } | any>;
+  context?: string; // The highlighted text snippet (optional)
   intent: InterrogateIntent;
 };
 
@@ -65,9 +65,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing or invalid messages" }, { status: 400 });
     }
 
-    if (!context || typeof context !== "string" || context.trim().length === 0) {
-      return NextResponse.json({ error: "Missing or invalid context" }, { status: 400 });
-    }
+    const contextText = typeof context === "string" ? context.trim() : "";
 
     const validIntent: InterrogateIntent = intent === "EXPLAIN" || intent === "CRITIQUE" ? intent : "GENERAL";
     const provider = getProvider();
@@ -96,18 +94,45 @@ export async function POST(request: Request) {
     // Build the system prompt
     const systemPrompt = buildSystemPrompt(validIntent);
 
-    // Enhance the last user message with context
-    const enhancedMessages = [...messages];
+    // Normalize messages coming from the client (supports both {content} and {parts} shapes)
+    const normalizedMessages = messages
+      .map((m: any) => {
+        const role: "user" | "assistant" = m?.role === "assistant" ? "assistant" : "user";
+        const content =
+          typeof m?.content === "string"
+            ? m.content
+            : Array.isArray(m?.parts)
+              ? m.parts
+                  .map((p: any) => (typeof p?.text === "string" ? p.text : ""))
+                  .filter(Boolean)
+                  .join("\n")
+              : "";
+        return { role, content };
+      })
+      .filter((m: any) => typeof m.content === "string" && m.content.trim().length > 0);
+
+    if (normalizedMessages.length === 0) {
+      return NextResponse.json({ error: "Missing or invalid messages" }, { status: 400 });
+    }
+
+    // Enhance the last user message with context (if provided)
+    const enhancedMessages = [...normalizedMessages];
     if (enhancedMessages.length > 0 && enhancedMessages[enhancedMessages.length - 1].role === "user") {
-      enhancedMessages[enhancedMessages.length - 1] = {
-        ...enhancedMessages[enhancedMessages.length - 1],
-        content: `Context from document:\n"${context}"\n\nUser question: ${enhancedMessages[enhancedMessages.length - 1].content}`,
-      };
+      if (contextText) {
+        enhancedMessages[enhancedMessages.length - 1] = {
+          ...enhancedMessages[enhancedMessages.length - 1],
+          content: `Context from document:\n"${contextText}"\n\nUser question: ${enhancedMessages[enhancedMessages.length - 1].content}`,
+        };
+      }
     } else {
-      // If no user message, add context as the first message
+      // If no user message, add a user message (with context if available)
       enhancedMessages.unshift({
         role: "user",
-        content: `Context from document:\n"${context}"\n\nUser question: ${messages[messages.length - 1]?.content || "Please analyze this text."}`,
+        content: contextText
+          ? `Context from document:\n"${contextText}"\n\nUser question: ${
+              (enhancedMessages[enhancedMessages.length - 1] as any)?.content || "Please analyze this text."
+            }`
+          : (enhancedMessages[enhancedMessages.length - 1] as any)?.content || "Please analyze this text.",
       });
     }
 

@@ -42,9 +42,50 @@ export function DumbyInterrogationReader({
   const [pdfError, setPdfError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  function normalizePdfHighlighterPosition(raw: any) {
+    if (!raw || typeof raw !== "object") return null;
+
+    const pageNumber =
+      typeof raw.pageNumber === "number"
+        ? raw.pageNumber
+        : typeof raw.pageNumber === "string" && raw.pageNumber.trim()
+          ? Number(raw.pageNumber)
+          : 1;
+
+    let rects: any[] | null = Array.isArray(raw.rects) ? raw.rects : null;
+    let boundingRect: any | null =
+      raw.boundingRect && typeof raw.boundingRect === "object" ? raw.boundingRect : null;
+
+    // Some persisted highlights may only have a single bounding rect (no `rects` array).
+    // `react-pdf-highlighter` expects `position.rects` to be iterable.
+    if (!rects) {
+      if (boundingRect) rects = [boundingRect];
+      else rects = [];
+    }
+
+    if (!boundingRect && rects.length > 0) boundingRect = rects[0];
+    if (!boundingRect) return null;
+
+    return {
+      ...raw,
+      pageNumber: Number.isFinite(pageNumber) && pageNumber > 0 ? pageNumber : 1,
+      boundingRect,
+      rects,
+    };
+  }
+
   // This modal is rendered inside a ReactFlow node (which is transformed).
   // Using a portal ensures our "fixed" overlay is truly viewport-fixed and centered.
   useEffect(() => setIsMounted(true), []);
+
+  // Note: react-pdf-highlighter handles pdfjs setup internally using its own bundled version (4.4.168)
+  // We don't need to configure it manually - just let it handle everything
+
+  // Clear error when PDF URL changes (new PDF being loaded)
+  useEffect(() => {
+    setPdfError(null);
+  }, [pdfUrl]);
+
 
   // Load highlights on mount
   useEffect(() => {
@@ -72,17 +113,41 @@ export function DumbyInterrogationReader({
   const [chat] = useState(() => {
     const transport: any = {
       async sendMessages({ messages, body: requestBody, ...options }: any) {
+        const toWireContent = (m: any): string => {
+          if (typeof m?.content === "string") return m.content;
+          const parts = m?.parts;
+          if (Array.isArray(parts)) {
+            return parts
+              .map((p: any) => (typeof p?.text === "string" ? p.text : ""))
+              .filter(Boolean)
+              .join("\n");
+          }
+          return "";
+        };
+
+        const wireMessages = (Array.isArray(messages) ? messages : [])
+          .map((m: any) => ({
+            role: m?.role === "assistant" ? "assistant" : "user",
+            content: toWireContent(m),
+          }))
+          .filter((m: any) => typeof m.content === "string" && m.content.trim().length > 0);
+
         const response = await fetch("/api/chat/dumby-interrogate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            messages,
-            context: selectedText,
-            intent: pendingIntent || "GENERAL",
+            messages: wireMessages,
+            // Prefer per-request body (avoids stale closures from the Chat transport initializer)
+            context: (requestBody as any)?.context ?? "",
+            intent: (requestBody as any)?.intent ?? "GENERAL",
             ...(requestBody as object),
           }),
           signal: options.abortSignal,
         });
+        if (!response.ok) {
+          const err = await response.json().catch(() => null);
+          throw new Error(err?.error || `Chat request failed (${response.status})`);
+        }
         if (!response.body) throw new Error("No response body");
         return response.body as ReadableStream<any>;
       },
@@ -208,27 +273,27 @@ export function DumbyInterrogationReader({
             ref={containerRef}
             style={{ height: '100%', minHeight: 0 }}
           >
-            <PdfLoader 
+            <PdfLoader
               url={pdfUrl} 
-              beforeLoad={
-                <div className="flex h-full items-center justify-center text-orange-200">
-                  {pdfError ? (
-                    <div className="text-center">
-                      <div className="text-red-400 mb-2">Failed to load PDF</div>
-                      <div className="text-xs text-orange-200/70">{pdfError}</div>
-                    </div>
-                  ) : (
-                    "Loading PDF Protocol..."
-                  )}
-                </div>
-              }
-              onError={(error) => {
-                console.error("PDF Load Error:", error);
-                setPdfError(error?.message || "Unknown error loading PDF");
-              }}
-            >
+                beforeLoad={
+                  <div className="flex h-full items-center justify-center text-orange-200">
+                    {pdfError ? (
+                      <div className="text-center">
+                        <div className="text-red-400 mb-2">Failed to load PDF</div>
+                        <div className="text-xs text-orange-200/70">{pdfError}</div>
+                      </div>
+                    ) : (
+                      "Loading PDF Protocol..."
+                    )}
+                  </div>
+                }
+                onError={(error) => {
+                  console.error("PDF Load Error:", error);
+                  setPdfError(error?.message || "Unknown error loading PDF");
+                }}
+              >
               {(pdfDocument) => {
-                setPdfError(null);
+                // PDF loaded successfully - error will be cleared by onError handler if needed
                 return (
                   <PdfHighlighter
                     pdfDocument={pdfDocument}
@@ -307,7 +372,8 @@ export function DumbyInterrogationReader({
                     screenshot,
                     isSelectionInProgress
                   ) => {
-                    const isTextHighlight = !(highlight.content as any).image;
+                    const contentAny = (highlight as any)?.content;
+                    const isTextHighlight = !(contentAny && (contentAny as any).image);
 
                     const component = isTextHighlight ? (
                       <PdfHighlight
@@ -338,12 +404,18 @@ export function DumbyInterrogationReader({
                       </Popup>
                     );
                   }}
-                  highlights={highlights.map(h => ({
-                    id: h.id,
-                    content: { text: h.content },
-                    position: h.position as any,
-                    comment: { text: h.comment || "", emoji: "" }
-                  }))}
+                  highlights={highlights.flatMap((h) => {
+                    const position = normalizePdfHighlighterPosition(h.position);
+                    if (!position) return [];
+                    return [
+                      {
+                        id: h.id,
+                        content: { text: h.content },
+                        position,
+                        comment: { text: h.comment || "", emoji: "" },
+                      },
+                    ];
+                  })}
                 />
                 );
               }}

@@ -109,6 +109,7 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
   const [aiError, setAiError] = useState<string>("");
   const [persistedPdfName, setPersistedPdfName] = useState<string>("");
   const [notesEditMode, setNotesEditMode] = useState(false);
+  const [showMarkdownView, setShowMarkdownView] = useState(true);
   const [showInterrogationReader, setShowInterrogationReader] = useState(false);
 
   const zoom = data.zoom ?? 1;
@@ -231,6 +232,8 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
       }
 
       data.onUpdate?.(id, { notes: body.summaryMarkdown });
+      setShowMarkdownView(true);
+      setNotesEditMode(false);
       setAiStatus("Saved summary.");
     } catch (e) {
       console.error(e);
@@ -671,14 +674,76 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                     placeholder={type === "resource" ? "Summary / notes…" : "Next step…"}
                     className="min-h-[88px] min-w-[200px] w-full resize rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 text-sm text-cyan-50 outline-none placeholder:text-cyan-200/30 focus:border-cyan-200/40"
                   />
-                ) : (
+                ) : type === "resource" && data.notes && showMarkdownView && !notesEditMode ? (
                   <div className="group relative min-h-[88px] min-w-[200px] w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 overflow-auto resize">
                     <div className="markdown-content text-sm text-cyan-100">
                       <ReactMarkdown>{data.notes}</ReactMarkdown>
                     </div>
+                    <div className="absolute right-2 top-2 flex gap-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowMarkdownView(false);
+                        }}
+                        className="rounded bg-slate-800/80 px-2 py-1 text-xs text-cyan-200 opacity-70 transition-opacity hover:bg-slate-700/80 hover:opacity-100"
+                        title="View raw text"
+                      >
+                        Raw
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setNotesEditMode(true);
+                        }}
+                        className="rounded bg-slate-800/80 px-2 py-1 text-xs text-cyan-200 opacity-70 transition-opacity hover:bg-slate-700/80 hover:opacity-100"
+                        title="Edit"
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  </div>
+                ) : type === "resource" && data.notes && !showMarkdownView && !notesEditMode ? (
+                  <div className="group relative min-h-[88px] min-w-[200px] w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 overflow-auto resize">
+                    <div className="text-sm text-cyan-100 whitespace-pre-wrap">
+                      {data.notes}
+                    </div>
+                    <div className="absolute right-2 top-2 flex gap-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowMarkdownView(true);
+                        }}
+                        className="rounded bg-slate-800/80 px-2 py-1 text-xs text-cyan-200 opacity-70 transition-opacity hover:bg-slate-700/80 hover:opacity-100"
+                        title="View markdown"
+                      >
+                        Markdown
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setNotesEditMode(true);
+                        }}
+                        className="rounded bg-slate-800/80 px-2 py-1 text-xs text-cyan-200 opacity-70 transition-opacity hover:bg-slate-700/80 hover:opacity-100"
+                        title="Edit"
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div 
+                    className="group relative min-h-[88px] min-w-[200px] w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 overflow-auto resize cursor-text"
+                    onClick={() => setNotesEditMode(true)}
+                  >
+                    <div className="markdown-content text-sm text-cyan-100 whitespace-pre-wrap">
+                      {data.notes}
+                    </div>
                     <button
-                      onClick={() => setNotesEditMode(true)}
-                      className="absolute right-2 top-2 hidden rounded bg-slate-800/80 px-2 py-1 text-xs text-cyan-200 opacity-0 transition-opacity hover:bg-slate-700/80 group-hover:opacity-100"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setNotesEditMode(true);
+                      }}
+                      className="absolute right-2 top-2 rounded bg-slate-800/80 px-2 py-1 text-xs text-cyan-200 opacity-70 transition-opacity hover:bg-slate-700/80 hover:opacity-100"
                     >
                       Edit
                     </button>
