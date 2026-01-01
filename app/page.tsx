@@ -243,6 +243,39 @@ function HomeContent() {
     setBathysphereNodeId(enabled ? nodeId : null);
   }, []);
 
+  const getViewportCenterFlowPosition = useCallback(() => {
+    const rect = wrapperRef.current?.getBoundingClientRect();
+    if (rect && rfRef.current?.screenToFlowPosition) {
+      return rfRef.current.screenToFlowPosition({
+        x: rect.width / 2,
+        y: rect.height / 2,
+      });
+    }
+    return { x: 0, y: 0 };
+  }, []);
+
+  const onExtractTask = useCallback(
+    (text: string, sourceNodeId: string) => {
+      // Find the source node to position the new task nearby
+      const sourceNode = nodes.find((n) => n.id === sourceNodeId);
+      const position = sourceNode
+        ? { x: sourceNode.position.x + 400, y: sourceNode.position.y }
+        : getViewportCenterFlowPosition();
+
+      const id = `tactical-${Date.now()}`;
+      const base = { title: "", notes: "" } satisfies GrimpoNodeData;
+      const data: GrimpoNodeData = {
+        ...base,
+        title: text.slice(0, 100), // Truncate if too long
+        notes: text.length > 100 ? text : "Task extracted from resource.",
+        status: "todo",
+      };
+
+      setNodes((nds) => nds.concat({ id, type: "tactical", position, data }));
+    },
+    [getViewportCenterFlowPosition, nodes, setNodes],
+  );
+
   // Get selected PDF nodes
   const selectedPdfNodes = useMemo(() => {
     return nodes.filter(
@@ -267,9 +300,10 @@ function HomeContent() {
         onDelete: onDeleteNode,
         onTaskDone: onTaskDone,
         onBathysphereMode: handleBathysphereMode,
+        onExtractTask: onExtractTask,
       },
     }));
-  }, [effectiveMode, nodes, onDeleteNode, onTaskDone, onUpdateNode, viewport.zoom, selectedNodeIds, handleBathysphereMode]);
+  }, [effectiveMode, nodes, onDeleteNode, onTaskDone, onUpdateNode, viewport.zoom, selectedNodeIds, handleBathysphereMode, onExtractTask]);
 
   const defaultEdgeOptions: DefaultEdgeOptions = useMemo(
     () => ({
@@ -309,17 +343,6 @@ function HomeContent() {
     },
     [setNodes],
   );
-
-  const getViewportCenterFlowPosition = useCallback(() => {
-    const rect = wrapperRef.current?.getBoundingClientRect();
-    if (rect && rfRef.current?.screenToFlowPosition) {
-      return rfRef.current.screenToFlowPosition({
-        x: rect.width / 2,
-        y: rect.height / 2,
-      });
-    }
-    return { x: 0, y: 0 };
-  }, []);
 
   const spawnThinkingPattern = useCallback(
     (args: { role: ThinkingRole; pattern: Exclude<ThinkingPattern, "blank"> }) => {
@@ -394,12 +417,29 @@ function HomeContent() {
       {bathysphereNodeId && (() => {
         const node = nodes.find((n) => n.id === bathysphereNodeId);
         if (!node || !node.data.pdfUrl?.trim()) return null;
+        
+        // Get node screen position for smooth animation
+        let nodePosition: { x: number; y: number } | undefined;
+        if (rfRef.current) {
+          try {
+            const flowPosition = rfRef.current.getNode(node.id)?.position;
+            if (flowPosition) {
+              const screenPos = rfRef.current.flowToScreenPosition(flowPosition);
+              nodePosition = { x: screenPos.x, y: screenPos.y };
+            }
+          } catch (e) {
+            // Fallback if position can't be determined
+            console.warn("Could not get node position for animation:", e);
+          }
+        }
+        
         return (
           <DumbyReader
             pdfUrl={node.data.pdfUrl}
             nodeId={node.id}
             nodeTitle={node.data.title}
             viewMode="bathysphere"
+            nodePosition={nodePosition}
             onViewModeChange={(mode) => {
               if (mode === "inline") {
                 setBathysphereNodeId(null);

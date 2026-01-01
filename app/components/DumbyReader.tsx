@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Minimize2, Maximize2, Send } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import type { GrimpoNodeData } from "@/app/lib/graph";
 import { addHighlight } from "@/app/actions/highlights";
 
@@ -18,6 +19,7 @@ type DumbyReaderProps = {
   syncScroll?: boolean;
   onScrollSync?: (scrollPercent: number) => void;
   scrollPercent?: number;
+  nodePosition?: { x: number; y: number };
 };
 
 export function DumbyReader({
@@ -31,6 +33,7 @@ export function DumbyReader({
   syncScroll = false,
   onScrollSync,
   scrollPercent = 0,
+  nodePosition,
 }: DumbyReaderProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -257,10 +260,38 @@ export function DumbyReader({
       // If we're already showing a popup, don't interrupt
       if (showSaveHighlightPopup || showManualInput) return;
 
+      // Don't trigger if user is pasting into an input/textarea (like a code editor)
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+        return;
+      }
+
+      // Only trigger if the container is focused/active or if the paste target is within our container
+      try {
+        const isWithinContainer = containerRef.current?.contains(target);
+        if (!isWithinContainer && document.activeElement !== containerRef.current) {
+          // Check if iframe is focused (cross-origin safe check)
+          if (iframeRef.current && document.activeElement !== iframeRef.current) {
+            return;
+          }
+        }
+      } catch (e) {
+        // Cross-origin restrictions - be conservative and don't auto-trigger
+        return;
+      }
+
       const text = e.clipboardData?.getData("text");
       if (text && text.trim().length >= 3) {
+        // Skip auto-trigger for SQL-looking content (likely accidental paste)
+        const trimmedText = text.trim();
+        if (trimmedText.startsWith("CREATE TABLE") || 
+            trimmedText.startsWith("--") && trimmedText.includes("CREATE TABLE") ||
+            trimmedText.includes("PRIMARY KEY") && trimmedText.includes("DEFAULT")) {
+          return; // Don't auto-trigger for SQL code
+        }
+
         setPendingHighlight({
-          text: text.trim(),
+          text: trimmedText,
           position: {
             timestamp: Date.now(),
             source: nodeTitle || nodeId,
@@ -405,9 +436,16 @@ export function DumbyReader({
             >
               <h3 className="mb-3 text-lg font-semibold text-cyan-50">Save Highlight?</h3>
               <div className="mb-4 rounded-lg border border-cyan-300/20 bg-slate-900/60 p-3 max-h-[200px] overflow-y-auto">
-                <p className="text-sm italic text-cyan-100/90 leading-relaxed">
-                  "{pendingHighlight.text}"
+                <p className="text-sm italic text-cyan-100/90 leading-relaxed whitespace-pre-wrap break-words">
+                  {pendingHighlight.text.length > 500 
+                    ? `"${pendingHighlight.text.substring(0, 500)}..."` 
+                    : `"${pendingHighlight.text}"`}
                 </p>
+                {pendingHighlight.text.length > 500 && (
+                  <p className="mt-2 text-xs text-cyan-300/50">
+                    (Showing first 500 characters of {pendingHighlight.text.length} total)
+                  </p>
+                )}
               </div>
               <div className="flex gap-3">
                 <button
@@ -447,169 +485,203 @@ export function DumbyReader({
 
   if (viewMode === "bathysphere") {
     // Bathysphere mode - full screen with glow
+    // Calculate initial animation state
+    const getInitialState = () => {
+      if (nodePosition && typeof window !== "undefined") {
+        return {
+          scale: 0.3,
+          x: nodePosition.x - window.innerWidth / 2,
+          y: nodePosition.y - window.innerHeight / 2,
+          opacity: 0.8,
+        };
+      }
+      return {
+        scale: 0.8,
+        opacity: 0,
+      };
+    };
+
     return (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center">
-        {/* Dark blurred background */}
-        <div
-          className="absolute inset-0 bg-slate-950/95 backdrop-blur-xl transition-opacity duration-700"
-          onClick={handleMinimize}
-        />
-        
-        {/* PDF container with glow */}
-        <div className="relative z-10 flex h-full w-full flex-col">
-          {/* Header with minimize button */}
-          <div className="flex items-center justify-between border-b border-cyan-300/20 bg-slate-950/50 px-6 py-4">
-            <h2 className="text-lg font-semibold text-cyan-50">{nodeTitle || "PDF Document"}</h2>
-            <button
-              onClick={handleMinimize}
-              className="rounded-full border border-cyan-300/20 bg-slate-950/40 p-2 text-cyan-200 hover:bg-slate-950/60"
-              title="Minimize"
-            >
-              <Minimize2 className="h-5 w-5" />
-            </button>
-          </div>
+      <AnimatePresence>
+        <motion.div
+          className="fixed inset-0 z-[100] flex items-center justify-center"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          {/* Dark blurred background */}
+          <motion.div
+            className="absolute inset-0 bg-slate-950/95 backdrop-blur-xl"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.7 }}
+            onClick={handleMinimize}
+          />
           
-          {/* PDF container with glow effect */}
-          <div
-            ref={containerRef}
-            className="flex-1 overflow-hidden p-8"
-            style={{
-              boxShadow: "0 0 50px rgba(255,255,255,0.1)",
+          {/* PDF container with glow */}
+          <motion.div
+            className="relative z-10 flex h-full w-full flex-col"
+            initial={getInitialState()}
+            animate={{
+              scale: 1,
+              x: 0,
+              y: 0,
+              opacity: 1,
+            }}
+            exit={{
+              scale: nodePosition ? 0.3 : 0.8,
+              opacity: 0,
+            }}
+            transition={{
+              type: "spring",
+              stiffness: 300,
+              damping: 30,
             }}
           >
-            <iframe
-              ref={iframeRef}
-              title={nodeTitle || "PDF"}
-              src={pdfUrl}
-              className="h-full w-full rounded-xl border border-cyan-300/10 bg-black/20"
-              loading="lazy"
-            />
+            {/* Header with minimize button */}
+            <div className="flex items-center justify-between border-b border-cyan-300/20 bg-slate-950/50 px-6 py-4">
+              <h2 className="text-lg font-semibold text-cyan-50">{nodeTitle || "PDF Document"}</h2>
+              <button
+                onClick={handleMinimize}
+                className="rounded-full border border-cyan-300/20 bg-slate-950/40 p-2 text-cyan-200 hover:bg-slate-950/60"
+                title="Minimize"
+              >
+                <Minimize2 className="h-5 w-5" />
+              </button>
+            </div>
             
-            {/* Floating Save Button - Always visible */}
-            <div className="absolute bottom-12 left-1/2 z-20 -translate-x-1/2">
-              {!showSaveHighlightPopup && !showManualInput && (
-                <button
-                  onClick={handleManualHighlightClick}
-                  className="flex items-center gap-2 rounded-full border border-cyan-300/30 bg-slate-950/95 px-6 py-3 text-base font-medium text-cyan-50 shadow-[0_0_32px_rgba(34,211,238,0.5)] backdrop-blur-md transition-all hover:bg-cyan-500/20 hover:shadow-[0_0_48px_rgba(34,211,238,0.6)]"
-                >
-                  <Send className="h-5 w-5" />
-                  Save Selection
-                </button>
+            {/* PDF container with glow effect */}
+            <div
+              ref={containerRef}
+              className="flex-1 overflow-hidden p-8"
+              style={{
+                boxShadow: "0 0 50px rgba(255,255,255,0.1)",
+              }}
+            >
+              <iframe
+                ref={iframeRef}
+                title={nodeTitle || "PDF"}
+                src={pdfUrl}
+                className="h-full w-full rounded-xl border border-cyan-300/10 bg-black/20"
+                loading="lazy"
+              />
+              
+              {/* Floating Save Button - Always visible */}
+              <div className="absolute bottom-12 left-1/2 z-20 -translate-x-1/2">
+                {!showSaveHighlightPopup && !showManualInput && (
+                  <button
+                    onClick={handleManualHighlightClick}
+                    className="flex items-center gap-2 rounded-full border border-cyan-300/30 bg-slate-950/95 px-6 py-3 text-base font-medium text-cyan-50 shadow-[0_0_32px_rgba(34,211,238,0.5)] backdrop-blur-md transition-all hover:bg-cyan-500/20 hover:shadow-[0_0_48px_rgba(34,211,238,0.6)]"
+                  >
+                    <Send className="h-5 w-5" />
+                    Save Selection
+                  </button>
+                )}
+              </div>
+
+              {/* Manual Input Modal */}
+              {showManualInput && (
+                <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 backdrop-blur-md">
+                  <div className="mx-4 w-full max-w-lg rounded-2xl border border-cyan-300/30 bg-slate-950/95 p-8 shadow-[0_0_48px_rgba(34,211,238,0.5)] backdrop-blur-md">
+                    <h3 className="mb-4 text-xl font-semibold text-cyan-50">Capture Highlight</h3>
+                    <p className="mb-6 text-sm text-cyan-300/60 leading-relaxed">
+                      Browser security prevents automatic detection for this document. 
+                      <br /><br />
+                      <strong>Simple Step:</strong> Select your text, <strong>Copy it (Ctrl+C)</strong>, then click <strong>Confirm & Save</strong> below:
+                    </p>
+                    <textarea
+                      value={manualText}
+                      onChange={(e) => setManualText(e.target.value)}
+                      placeholder="Paste text here..."
+                      className="mb-6 w-full min-h-[150px] rounded-xl border border-cyan-300/20 bg-slate-900/60 p-4 text-sm text-cyan-50 placeholder:text-cyan-300/30 outline-none focus:border-cyan-400/50"
+                      autoFocus
+                    />
+                    <div className="flex gap-4">
+                      <button
+                        onClick={async () => {
+                          try {
+                            const text = await navigator.clipboard.readText();
+                            if (text) setManualText(text);
+                          } catch (e) {}
+                        }}
+                        className="rounded-xl border border-cyan-300/20 bg-slate-800/60 px-6 py-3 text-sm text-cyan-200"
+                      >
+                        Paste Text
+                      </button>
+                      <button
+                        onClick={handleManualSubmit}
+                        disabled={manualText.trim().length < 3}
+                        className="flex-1 rounded-xl border border-cyan-300/30 bg-cyan-500/20 px-6 py-3 text-sm font-medium text-cyan-50 transition-all hover:bg-cyan-500/30"
+                      >
+                        Confirm & Save
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowManualInput(false);
+                          setManualText("");
+                        }}
+                        className="rounded-xl border border-cyan-300/20 bg-slate-950/60 px-6 py-3 text-sm text-cyan-300/70"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Save Highlight Popup - Confirmation */}
+              {showSaveHighlightPopup && pendingHighlight && (
+                <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 backdrop-blur-md">
+                  <div 
+                    className="mx-4 w-full max-w-lg rounded-2xl border border-cyan-300/30 bg-slate-950/95 p-8 shadow-[0_0_48px_rgba(34,211,238,0.5)] backdrop-blur-md"
+                    style={{
+                      animation: "fadeInSlideUp 0.3s ease-in-out",
+                    }}
+                  >
+                    <h3 className="mb-4 text-xl font-semibold text-cyan-50">Save Highlight?</h3>
+                    <div className="mb-6 rounded-xl border border-cyan-300/20 bg-slate-900/60 p-4 max-h-[300px] overflow-y-auto">
+                      <p className="text-sm italic text-cyan-100/90 leading-relaxed">
+                        "{pendingHighlight.text}"
+                      </p>
+                    </div>
+                    <div className="flex gap-4">
+                      <button
+                        onClick={handleSaveHighlight}
+                        className="flex-1 rounded-xl border border-cyan-300/30 bg-cyan-500/20 px-6 py-3 text-sm font-medium text-cyan-50 transition-all hover:bg-cyan-500/30 hover:shadow-[0_0_24px_rgba(34,211,238,0.4)]"
+                      >
+                        Save Highlight
+                      </button>
+                      <button
+                        onClick={handleCancelHighlight}
+                        className="rounded-xl border border-cyan-300/20 bg-slate-950/60 px-6 py-3 text-sm text-cyan-300/70 transition-all hover:bg-slate-950/80"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Notification when text is saved */}
+              {showSentNotification && (
+                <div className="absolute bottom-12 left-1/2 z-20 -translate-x-1/2 pointer-events-none">
+                  <div 
+                    className="flex items-center gap-2 rounded-full border border-cyan-300/30 bg-slate-950/95 px-6 py-3 text-base font-medium text-cyan-50 shadow-[0_0_32px_rgba(34,211,238,0.5)] backdrop-blur-md"
+                    style={{
+                      animation: "fadeInSlideUp 0.3s ease-in-out",
+                    }}
+                  >
+                    <Send className="h-4 w-4" />
+                    Saved to Resource Chamber
+                  </div>
+                </div>
               )}
             </div>
-
-            {/* Manual Input Modal */}
-            {showManualInput && (
-              <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 backdrop-blur-md">
-                <div className="mx-4 w-full max-w-lg rounded-2xl border border-cyan-300/30 bg-slate-950/95 p-8 shadow-[0_0_48px_rgba(34,211,238,0.5)] backdrop-blur-md">
-                  <h3 className="mb-4 text-xl font-semibold text-cyan-50">Capture Highlight</h3>
-                  <p className="mb-6 text-sm text-cyan-300/60 leading-relaxed">
-                    Browser security prevents automatic detection for this document. 
-                    <br /><br />
-                    <strong>Simple Step:</strong> Select your text, <strong>Copy it (Ctrl+C)</strong>, then click <strong>Confirm & Save</strong> below:
-                  </p>
-                  <textarea
-                    value={manualText}
-                    onChange={(e) => setManualText(e.target.value)}
-                    placeholder="Paste text here..."
-                    className="mb-6 w-full min-h-[150px] rounded-xl border border-cyan-300/20 bg-slate-900/60 p-4 text-sm text-cyan-50 placeholder:text-cyan-300/30 outline-none focus:border-cyan-400/50"
-                    autoFocus
-                  />
-                  <div className="flex gap-4">
-                    <button
-                      onClick={async () => {
-                        try {
-                          const text = await navigator.clipboard.readText();
-                          if (text) setManualText(text);
-                        } catch (e) {}
-                      }}
-                      className="rounded-xl border border-cyan-300/20 bg-slate-800/60 px-6 py-3 text-sm text-cyan-200"
-                    >
-                      Paste Text
-                    </button>
-                    <button
-                      onClick={handleManualSubmit}
-                      disabled={manualText.trim().length < 3}
-                      className="flex-1 rounded-xl border border-cyan-300/30 bg-cyan-500/20 px-6 py-3 text-sm font-medium text-cyan-50 transition-all hover:bg-cyan-500/30"
-                    >
-                      Confirm & Save
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowManualInput(false);
-                        setManualText("");
-                      }}
-                      className="rounded-xl border border-cyan-300/20 bg-slate-950/60 px-6 py-3 text-sm text-cyan-300/70"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Save Highlight Popup - Confirmation */}
-            {showSaveHighlightPopup && pendingHighlight && (
-              <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 backdrop-blur-md">
-                <div 
-                  className="mx-4 w-full max-w-lg rounded-2xl border border-cyan-300/30 bg-slate-950/95 p-8 shadow-[0_0_48px_rgba(34,211,238,0.5)] backdrop-blur-md"
-                  style={{
-                    animation: "fadeInSlideUp 0.3s ease-in-out",
-                  }}
-                >
-                  <h3 className="mb-4 text-xl font-semibold text-cyan-50">Save Highlight?</h3>
-                  <div className="mb-6 rounded-xl border border-cyan-300/20 bg-slate-900/60 p-4 max-h-[300px] overflow-y-auto">
-                    <p className="text-sm italic text-cyan-100/90 leading-relaxed">
-                      "{pendingHighlight.text}"
-                    </p>
-                  </div>
-                  <div className="flex gap-4">
-                    <button
-                      onClick={handleSaveHighlight}
-                      className="flex-1 rounded-xl border border-cyan-300/30 bg-cyan-500/20 px-6 py-3 text-sm font-medium text-cyan-50 transition-all hover:bg-cyan-500/30 hover:shadow-[0_0_24px_rgba(34,211,238,0.4)]"
-                    >
-                      Save Highlight
-                    </button>
-                    <button
-                      onClick={handleCancelHighlight}
-                      className="rounded-xl border border-cyan-300/20 bg-slate-950/60 px-6 py-3 text-sm text-cyan-300/70 transition-all hover:bg-slate-950/80"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Notification when text is saved */}
-            {showSentNotification && (
-              <div className="absolute bottom-12 left-1/2 z-20 -translate-x-1/2 pointer-events-none">
-                <div 
-                  className="flex items-center gap-2 rounded-full border border-cyan-300/30 bg-slate-950/95 px-6 py-3 text-base font-medium text-cyan-50 shadow-[0_0_32px_rgba(34,211,238,0.5)] backdrop-blur-md"
-                  style={{
-                    animation: "fadeInSlideUp 0.3s ease-in-out",
-                  }}
-                >
-                  <Send className="h-4 w-4" />
-                  Saved to Resource Chamber
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-        <style dangerouslySetInnerHTML={{__html: `
-          @keyframes fadeInSlideUp {
-            from {
-              opacity: 0;
-              transform: translateY(10px);
-            }
-            to {
-              opacity: 1;
-              transform: translateY(0);
-            }
-          }
-        `}} />
-      </div>
+          </motion.div>
+        </motion.div>
+      </AnimatePresence>
     );
   }
 

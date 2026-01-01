@@ -2,7 +2,7 @@
 // Run the SQL from schema.sql in Neon console - do NOT use drizzle-kit migrations
 // This file contains TypeScript definitions for Drizzle queries only
 
-import { pgTable, text, timestamp, uuid, jsonb, serial, varchar, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, jsonb, serial, varchar, boolean, uniqueIndex } from "drizzle-orm/pg-core";
 
 // Canvases table
 export const canvases = pgTable("canvases", {
@@ -68,6 +68,47 @@ export const verificationTokens = pgTable("verification_tokens", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// PDF summaries table
+export const pdfSummaries = pgTable(
+  "pdf_summaries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    nodeId: text("node_id").notNull(),
+    pdfBlobUrl: text("pdf_blob_url").notNull(),
+    pdfFilename: text("pdf_filename"),
+    summaryMarkdown: text("summary_markdown").notNull(),
+    summaryJson: jsonb("summary_json").$type<Record<string, unknown> | null>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userNodeUnique: uniqueIndex("pdf_summaries_user_node_unique").on(table.userId, table.nodeId),
+  }),
+);
+
+// PDF Highlights table
+export const highlights = pgTable(
+  "highlights",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    nodeId: text("node_id").notNull(),
+    content: text("content").notNull(),
+    comment: text("comment"),
+    position: jsonb("position").$type<{
+      boundingRect: any;
+      rects: any[];
+      pageNumber: number;
+    }>(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userNodeHighlightUnique: uniqueIndex("highlights_user_node_content_unique").on(table.userId, table.nodeId, table.content),
+  }),
+);
+
 export type Canvas = typeof canvases.$inferSelect;
 export type NewCanvas = typeof canvases.$inferInsert;
 export type GrimpoState = typeof grimpoStates.$inferSelect;
@@ -80,4 +121,8 @@ export type Account = typeof accounts.$inferSelect;
 export type NewAccount = typeof accounts.$inferInsert;
 export type VerificationToken = typeof verificationTokens.$inferSelect;
 export type NewVerificationToken = typeof verificationTokens.$inferInsert;
+export type PdfSummary = typeof pdfSummaries.$inferSelect;
+export type NewPdfSummary = typeof pdfSummaries.$inferInsert;
+export type Highlight = typeof highlights.$inferSelect;
+export type NewHighlight = typeof highlights.$inferInsert;
 

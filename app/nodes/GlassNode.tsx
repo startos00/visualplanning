@@ -8,6 +8,7 @@ import type { GrimpoNodeData, ModeSetting, NodeKind } from "@/app/lib/graph";
 import ReactMarkdown from "react-markdown";
 import { AbyssalCheckbox } from "../components/ui/AbyssalCheckbox";
 import { DumbyReader } from "../components/DumbyReader";
+import { DumbyInterrogationReader } from "../components/DumbyInterrogationReader";
 
 type EffectiveMode = Exclude<ModeSetting, "auto">;
 
@@ -19,6 +20,7 @@ type GlassNodeData = GrimpoNodeData & {
   onDelete?: (id: string) => void;
   onTaskDone?: (id: string) => void;
   onBathysphereMode?: (nodeId: string, enabled: boolean) => void;
+  onExtractTask?: (text: string, sourceNodeId: string) => void;
 };
 
 // Color palette constants
@@ -107,6 +109,7 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
   const [aiError, setAiError] = useState<string>("");
   const [persistedPdfName, setPersistedPdfName] = useState<string>("");
   const [notesEditMode, setNotesEditMode] = useState(false);
+  const [showInterrogationReader, setShowInterrogationReader] = useState(false);
 
   const zoom = data.zoom ?? 1;
   const mode = data.mode ?? "tactical";
@@ -125,7 +128,6 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
   const borderColor = overdue ? "#ef4444" : selectedColor;
   const glowColor = overdue ? "#ef4444" : selectedColor;
   // Increased glow intensity for better visibility, especially when zoomed out
-  // When zoomed out, increase intensity significantly to maintain visibility
   const isZoomedOut = zoom < 1;
   const baseIntensity = selected ? 0.9 : 0.7;
   const zoomedOutIntensity = selected ? 1.0 : 0.85;
@@ -252,8 +254,6 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
       if (!res.ok) throw new Error("Failed to fetch PDF");
       pdfBytes = await res.arrayBuffer();
     } catch {
-      // Common cause: CORS blocked on direct browser fetch for third-party PDF URLs.
-      // Fallback to same-origin proxy route.
       setAiStatus("Downloading PDF (proxy)…");
       const proxyRes = await fetch(`/api/pdf/fetch?url=${encodeURIComponent(pdfUrl)}`);
       if (proxyRes.status === 401) {
@@ -265,22 +265,14 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
       pdfBytes = await proxyRes.arrayBuffer();
     }
 
-    // pdfjs setup (dynamic import so it stays client-only)
     const pdfjs = await import("pdfjs-dist/legacy/build/pdf");
-    // Worker setup for bundlers
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
-    pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-      "pdfjs-dist/legacy/build/pdf.worker.min.mjs",
-      import.meta.url,
-    ).toString();
+    pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
     const doc = await pdfjs.getDocument({ data: pdfBytes }).promise;
     const pageCount = Math.min(doc.numPages, MAX_PAGES);
 
-    // First pass: try native text extraction (fast for real text PDFs)
     setAiStatus(`Extracting text (pages 1-${pageCount})…`);
     let extractedText = "";
     for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
@@ -294,7 +286,6 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
       if (pageText) extractedText += pageText + "\n\n";
     }
 
-    // Second pass: OCR if the extracted text is too small (scanned PDFs)
     if (extractedText.trim().length >= OCR_MIN_TEXT_CHARS) {
       return extractedText.trim();
     }
@@ -304,10 +295,10 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
 
     const tesseract = await import("tesseract.js");
     const worker = await tesseract.createWorker({
-      logger: (m: unknown) => {
+      logger: (m: any) => {
         if (!m || typeof m !== "object") return;
-        const status = (m as { status?: unknown }).status;
-        const progress = (m as { progress?: unknown }).progress;
+        const status = m.status;
+        const progress = m.progress;
         if (typeof status === "string" && typeof progress === "number") {
           const pct = Math.round(progress * 100);
           setAiStatus(`OCR: ${status} (${pct}%)`);
@@ -351,446 +342,396 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
   const borderStyle = { borderColor: borderRgba };
   const shadowStyle = { boxShadow: `0 0 ${glowSpread} ${glowRgba}` };
 
+  const handleDoubleClick = () => {
+    if (type === "resource" && data.pdfUrl && data.pdfUrl.trim()) {
+      setShowInterrogationReader(true);
+    }
+  };
+
+  const handleExtractTask = (text: string) => {
+    if (data.onExtractTask) {
+      data.onExtractTask(text, id);
+    }
+  };
+
   return (
-    <div
-      className={[
-        "relative w-[320px] rounded-3xl border bg-slate-900/50 backdrop-blur-md",
-        "transition-all duration-200",
-        done ? "opacity-60" : "",
-        !selected && !done && !swallowing ? "octo-breath" : "",
-        swallowing ? "scale-0 opacity-0" : "",
-      ].join(" ")}
-      style={{ ...borderStyle, ...shadowStyle }}
-    >
-      {/* sheen */}
-      <div className="pointer-events-none absolute inset-0 rounded-3xl bg-gradient-to-b from-white/10 to-transparent" />
+    <>
+      {showInterrogationReader && data.pdfUrl && (
+        <DumbyInterrogationReader
+          pdfUrl={data.pdfUrl}
+          nodeId={id}
+          nodeTitle={data.title}
+          onClose={() => setShowInterrogationReader(false)}
+          onExtractTask={handleExtractTask}
+        />
+      )}
+      <div
+        className={[
+          "relative w-[320px] rounded-3xl border bg-slate-900/50 backdrop-blur-md",
+          "transition-all duration-200",
+          done ? "opacity-60" : "",
+          !selected && !done && !swallowing ? "octo-breath" : "",
+          swallowing ? "scale-0 opacity-0" : "",
+          type === "resource" && data.pdfUrl ? "cursor-pointer" : "",
+        ].join(" ")}
+        style={{ ...borderStyle, ...shadowStyle }}
+        onDoubleClick={handleDoubleClick}
+      >
+        {/* sheen */}
+        <div className="pointer-events-none absolute inset-0 rounded-3xl bg-gradient-to-b from-white/10 to-transparent" />
 
-      <Handle
-        type="target"
-        position={Position.Left}
-        className="!h-3 !w-3 !border-0 !bg-cyan-300/70 !shadow-[0_0_10px_rgba(34,211,238,0.55)]"
-      />
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="!h-3 !w-3 !border-0 !bg-cyan-300/70 !shadow-[0_0_10px_rgba(34,211,238,0.55)]"
-      />
-
-      <div className="relative p-4">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-xs tracking-widest text-cyan-200/90">
-            <badge.Icon className="h-4 w-4 text-cyan-200/90" />
-            <span className="rounded-full border border-cyan-300/20 bg-slate-950/40 px-2 py-1">
-              {badge.label}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            {/* Deadline date input */}
-            <div className="relative flex items-center">
-              <input
-                type="date"
-                value={data.deadline ?? ""}
-                onChange={(e) => {
-                  const value = e.target.value || undefined;
-                  data.onUpdate?.(id, { deadline: value });
-                }}
-                className="h-7 rounded-full border border-cyan-300/15 bg-slate-950/30 px-3 text-[10px] text-cyan-50/80 outline-none transition-all hover:bg-slate-950/50 hover:border-cyan-300/30 focus:border-cyan-300/50 focus:ring-1 focus:ring-cyan-300/20"
-                title="Set deadline"
-              />
-            </div>
-            {type === "resource" && !titleOnly && data.link ? (
-              <button
-                onClick={() => window.open(data.link, "_blank", "noopener,noreferrer")}
-                className="inline-flex items-center gap-1 rounded-full border border-rose-300/20 bg-rose-500/10 px-2 py-1 text-xs text-rose-200 shadow-[0_0_14px_rgba(244,63,94,0.18)] hover:bg-rose-500/20"
-                title="Open link"
-              >
-                <ExternalLink className="h-3 w-3" />
-                Open
-              </button>
-            ) : null}
-          </div>
-        </div>
-
-        <input
-          value={data.title ?? ""}
-          onChange={(e) => data.onUpdate?.(id, { title: e.target.value })}
-          placeholder="Title…"
-          className={[
-            "w-full bg-transparent font-semibold outline-none",
-            "text-cyan-50 placeholder:text-cyan-200/40",
-            titleOnly ? "text-2xl" : "text-lg",
-          ].join(" ")}
+        <Handle
+          type="target"
+          position={Position.Left}
+          className="!h-3 !w-3 !border-0 !bg-cyan-300/70 !shadow-[0_0_10px_rgba(34,211,238,0.55)]"
+        />
+        <Handle
+          type="source"
+          position={Position.Right}
+          className="!h-3 !w-3 !border-0 !bg-cyan-300/70 !shadow-[0_0_10px_rgba(34,211,238,0.55)]"
         />
 
-        {!titleOnly ? (
-          <div className="mt-3 space-y-3">
-            {type === "resource" ? (
-              <div className="space-y-2">
+        <div className="relative p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs tracking-widest text-cyan-200/90">
+              <badge.Icon className="h-4 w-4 text-cyan-200/90" />
+              <span className="rounded-full border border-cyan-300/20 bg-slate-950/40 px-2 py-1">
+                {badge.label}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="relative flex items-center">
                 <input
-                  value={data.link ?? ""}
-                  onChange={(e) => data.onUpdate?.(id, { link: e.target.value })}
-                  placeholder="Link (URL)…"
-                  className="w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 text-sm text-cyan-50 outline-none placeholder:text-cyan-200/30 focus:border-cyan-200/40"
+                  type="date"
+                  value={data.deadline ?? ""}
+                  onChange={(e) => {
+                    const value = e.target.value || undefined;
+                    data.onUpdate?.(id, { deadline: value });
+                  }}
+                  className="h-7 rounded-full border border-cyan-300/15 bg-slate-950/30 px-3 text-[10px] text-cyan-50/80 outline-none transition-all hover:bg-slate-950/50 hover:border-cyan-300/30 focus:border-cyan-300/50 focus:ring-1 focus:ring-cyan-300/20"
+                  title="Set deadline"
                 />
-                <div className="relative">
+              </div>
+              {type === "resource" && !titleOnly && data.link ? (
+                <button
+                  onClick={() => window.open(data.link, "_blank", "noopener,noreferrer")}
+                  className="inline-flex items-center gap-1 rounded-full border border-rose-300/20 bg-rose-500/10 px-2 py-1 text-xs text-rose-200 shadow-[0_0_14px_rgba(244,63,94,0.18)] hover:bg-rose-500/20"
+                  title="Open link"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Open
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          <input
+            value={data.title ?? ""}
+            onChange={(e) => data.onUpdate?.(id, { title: e.target.value })}
+            placeholder="Title…"
+            className={[
+              "w-full bg-transparent font-semibold outline-none",
+              "text-cyan-50 placeholder:text-cyan-200/40",
+              titleOnly ? "text-2xl" : "text-lg",
+            ].join(" ")}
+          />
+
+          {!titleOnly ? (
+            <div className="mt-3 space-y-3">
+              {type === "resource" ? (
+                <div className="space-y-2">
                   <input
-                    value={data.pdfUrl ?? ""}
-                    onChange={(e) => data.onUpdate?.(id, { pdfUrl: e.target.value })}
-                    placeholder="PDF URL…"
-                    className="w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 pr-8 text-sm text-cyan-50 outline-none placeholder:text-cyan-200/30 focus:border-cyan-200/40"
+                    value={data.link ?? ""}
+                    onChange={(e) => data.onUpdate?.(id, { link: e.target.value })}
+                    placeholder="Link (URL)…"
+                    className="w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 text-sm text-cyan-50 outline-none placeholder:text-cyan-200/30 focus:border-cyan-200/40"
                   />
-                  {data.pdfUrl ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        data.onUpdate?.(id, { pdfUrl: "" });
-                        setPersistedPdfName("");
-                      }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-cyan-200/60 hover:bg-slate-800/50 hover:text-cyan-200"
-                      title="Clear PDF URL"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  ) : null}
-                </div>
-                <div className="relative">
-                  <input
-                    value={data.videoUrl ?? ""}
-                    onChange={(e) => data.onUpdate?.(id, { videoUrl: e.target.value })}
-                    placeholder="YouTube URL…"
-                    className="w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 pr-8 text-sm text-cyan-50 outline-none placeholder:text-cyan-200/30 focus:border-cyan-200/40"
-                  />
-                  {data.videoUrl ? (
-                    <button
-                      type="button"
-                      onClick={() => data.onUpdate?.(id, { videoUrl: "" })}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-cyan-200/60 hover:bg-slate-800/50 hover:text-cyan-200"
-                      title="Clear video URL"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  ) : null}
-                </div>
+                  <div className="relative">
+                    <input
+                      value={data.pdfUrl ?? ""}
+                      onChange={(e) => data.onUpdate?.(id, { pdfUrl: e.target.value })}
+                      placeholder="PDF URL…"
+                      className="w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 pr-8 text-sm text-cyan-50 outline-none placeholder:text-cyan-200/30 focus:border-cyan-200/40"
+                    />
+                    {data.pdfUrl ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          data.onUpdate?.(id, { pdfUrl: "" });
+                          setPersistedPdfName("");
+                        }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-cyan-200/60 hover:bg-slate-800/50 hover:text-cyan-200"
+                        title="Clear PDF URL"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    ) : null}
+                  </div>
+                  <div className="relative">
+                    <input
+                      value={data.videoUrl ?? ""}
+                      onChange={(e) => data.onUpdate?.(id, { videoUrl: e.target.value })}
+                      placeholder="YouTube URL…"
+                      className="w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 pr-8 text-sm text-cyan-50 outline-none placeholder:text-cyan-200/30 focus:border-cyan-200/40"
+                    />
+                    {data.videoUrl ? (
+                      <button
+                        type="button"
+                        onClick={() => data.onUpdate?.(id, { videoUrl: "" })}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-cyan-200/60 hover:bg-slate-800/50 hover:text-cyan-200"
+                        title="Clear video URL"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    ) : null}
+                  </div>
 
-                {/* Upload PDF preview-only (not persisted) */}
-                <div className="flex items-center justify-between gap-2">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="application/pdf"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-
-                      // Replace previous preview URL (cleanup happens in effect).
-                      setLocalPdfPreviewUrl((prev) => {
-                        if (prev) URL.revokeObjectURL(prev);
-                        return URL.createObjectURL(file);
-                      });
-                      setLocalPdfName(file.name);
-                    }}
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="rounded-full border border-rose-300/20 bg-rose-500/10 px-3 py-1 text-xs text-rose-200 shadow-[0_0_14px_rgba(244,63,94,0.18)] hover:bg-rose-500/20"
-                    title="Upload a PDF for session-only preview (won’t persist on refresh)"
-                  >
-                    Upload PDF (preview)
-                  </button>
-
-                  {localPdfPreviewUrl ? (
-                    <button
-                      type="button"
-                      onClick={() => {
+                  <div className="flex items-center justify-between gap-2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="application/pdf"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
                         setLocalPdfPreviewUrl((prev) => {
                           if (prev) URL.revokeObjectURL(prev);
-                          return null;
+                          return URL.createObjectURL(file);
                         });
-                        setLocalPdfName("");
-                        if (fileInputRef.current) fileInputRef.current.value = "";
+                        setLocalPdfName(file.name);
                       }}
-                      className="rounded-full border border-cyan-300/20 bg-slate-950/30 px-3 py-1 text-xs text-cyan-100/80 hover:bg-slate-950/45"
-                      title="Clear local PDF preview"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="rounded-full border border-rose-300/20 bg-rose-500/10 px-3 py-1 text-xs text-rose-200 shadow-[0_0_14px_rgba(244,63,94,0.18)] hover:bg-rose-500/20"
+                      title="Upload a PDF for session-only preview"
                     >
-                      Clear
+                      Upload PDF (preview)
                     </button>
-                  ) : null}
-                </div>
-
-                {localPdfName ? (
-                  <div className="text-xs text-cyan-100/60">
-                    Preview-only: {localPdfName} (won’t persist on refresh)
+                    {localPdfPreviewUrl ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLocalPdfPreviewUrl((prev) => {
+                            if (prev) URL.revokeObjectURL(prev);
+                            return null;
+                          });
+                          setLocalPdfName("");
+                          if (fileInputRef.current) fileInputRef.current.value = "";
+                        }}
+                        className="rounded-full border border-cyan-300/20 bg-slate-950/30 px-3 py-1 text-xs text-cyan-100/80 hover:bg-slate-950/45"
+                      >
+                        Clear
+                      </button>
+                    ) : null}
                   </div>
-                ) : null}
 
-                {/* Upload PDF (persisted) */}
-                <div className="flex items-center justify-between gap-2">
-                  <input
-                    ref={persistFileInputRef}
-                    type="file"
-                    accept="application/pdf"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      uploadPersistedPdf(file);
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => persistFileInputRef.current?.click()}
-                    disabled={pdfUploading || ocrRunning || summarising}
-                    className={[
-                      "rounded-full border border-cyan-300/20 bg-slate-950/30 px-3 py-1 text-xs text-cyan-100/80 hover:bg-slate-950/45",
-                      pdfUploading || ocrRunning || summarising ? "opacity-50" : "",
-                    ].join(" ")}
-                    title="Upload and save a PDF (persists)"
-                  >
-                    {pdfUploading ? "Uploading…" : "Upload PDF (save)"}
-                  </button>
-
-                  {aiStatus ? <div className="text-xs text-cyan-100/60">{aiStatus}</div> : null}
-                </div>
-
-                <div className="flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() => summarisePersistedPdf()}
-                    disabled={pdfUploading || ocrRunning || summarising}
-                    className={[
-                      "rounded-full border border-rose-300/20 bg-rose-500/10 px-3 py-1 text-xs text-rose-200 shadow-[0_0_14px_rgba(244,63,94,0.18)] hover:bg-rose-500/20",
-                      pdfUploading || ocrRunning || summarising ? "opacity-50" : "",
-                    ].join(" ")}
-                    title="Generate a structured summary and save it into this card"
-                  >
-                    {summarising ? "Summarising…" : "Summarise"}
-                  </button>
-
-                  {(data.pdfUrl ?? "").trim() ? (
+                  {localPdfName ? (
                     <div className="text-xs text-cyan-100/60">
-                      PDF: {persistedPdfName ? persistedPdfName : "ready"}
+                      Preview-only: {localPdfName}
                     </div>
-                  ) : (
-                    <div className="text-xs text-cyan-100/60">No saved PDF yet</div>
-                  )}
-                </div>
+                  ) : null}
 
-                {aiError ? (
-                  <div className="text-xs text-rose-200/90">
-                    {aiError}
+                  <div className="flex items-center justify-between gap-2">
+                    <input
+                      ref={persistFileInputRef}
+                      type="file"
+                      accept="application/pdf"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        uploadPersistedPdf(file);
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => persistFileInputRef.current?.click()}
+                      disabled={pdfUploading || ocrRunning || summarising}
+                      className={[
+                        "rounded-full border border-cyan-300/20 bg-slate-950/30 px-3 py-1 text-xs text-cyan-100/80 hover:bg-slate-950/45",
+                        pdfUploading || ocrRunning || summarising ? "opacity-50" : "",
+                      ].join(" ")}
+                    >
+                      {pdfUploading ? "Uploading…" : "Upload PDF (save)"}
+                    </button>
+                    {aiStatus ? <div className="text-xs text-cyan-100/60">{aiStatus}</div> : null}
                   </div>
-                ) : null}
 
-                {/* Previews */}
-                {(() => {
-                  const pdfSrc = localPdfPreviewUrl || (data.pdfUrl ?? "").trim();
-                  const ytEmbed = getYouTubeEmbedUrl((data.videoUrl ?? "").trim());
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => summarisePersistedPdf()}
+                      disabled={pdfUploading || ocrRunning || summarising}
+                      className={[
+                        "rounded-full border border-rose-300/20 bg-rose-500/10 px-3 py-1 text-xs text-rose-200 shadow-[0_0_14px_rgba(244,63,94,0.18)] hover:bg-rose-500/20",
+                        pdfUploading || ocrRunning || summarising ? "opacity-50" : "",
+                      ].join(" ")}
+                    >
+                      {summarising ? "Summarising…" : "Summarise"}
+                    </button>
+                    {(data.pdfUrl ?? "").trim() ? (
+                      <div className="text-xs text-cyan-100/60">
+                        PDF: {persistedPdfName || "ready"}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-cyan-100/60">No saved PDF yet</div>
+                    )}
+                  </div>
 
-                  return (
-                    <div className="space-y-2">
-                      {pdfSrc ? (
-                        <div className="rounded-2xl border border-cyan-300/20 bg-slate-950/20 p-2">
-                          <div className="mb-2 flex items-center justify-between gap-2">
-                            <div className="text-xs tracking-widest text-cyan-100/70">PDF</div>
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  data.onBathysphereMode?.(id, true);
-                                }}
-                                className="inline-flex items-center gap-1 rounded-full border border-cyan-300/20 bg-cyan-500/10 px-2 py-1 text-xs text-cyan-200 hover:bg-cyan-500/20"
-                                title="Maximize (Bathysphere Mode)"
-                              >
-                                <Maximize2 className="h-3 w-3" />
-                                Maximize
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (localPdfPreviewUrl) {
-                                    setLocalPdfPreviewUrl((prev) => {
-                                      if (prev) URL.revokeObjectURL(prev);
-                                      return null;
-                                    });
-                                    setLocalPdfName("");
-                                    if (fileInputRef.current) fileInputRef.current.value = "";
-                                  } else {
-                                    data.onUpdate?.(id, { pdfUrl: "" });
-                                    setPersistedPdfName("");
-                                  }
-                                }}
-                                className="inline-flex items-center gap-1 rounded-full border border-rose-300/20 bg-rose-500/10 px-2 py-1 text-xs text-rose-200 hover:bg-rose-500/20"
-                                title="Delete PDF"
-                              >
-                                <X className="h-3 w-3" />
-                                Delete
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => window.open(pdfSrc, "_blank", "noopener,noreferrer")}
-                                className="inline-flex items-center gap-1 rounded-full border border-rose-300/20 bg-rose-500/10 px-2 py-1 text-xs text-rose-200 hover:bg-rose-500/20"
-                                title="Open PDF in new tab"
-                              >
-                                <ExternalLink className="h-3 w-3" />
-                                Open
-                              </button>
+                  {aiError ? <div className="text-xs text-rose-200/90">{aiError}</div> : null}
+
+                  {(() => {
+                    const pdfSrc = localPdfPreviewUrl || (data.pdfUrl ?? "").trim();
+                    const ytEmbed = getYouTubeEmbedUrl((data.videoUrl ?? "").trim());
+
+                    return (
+                      <div className="space-y-2">
+                        {pdfSrc ? (
+                          <div className="rounded-2xl border border-cyan-300/20 bg-slate-950/20 p-2">
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <div className="text-xs tracking-widest text-cyan-100/70">PDF</div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => data.onBathysphereMode?.(id, true)}
+                                  className="inline-flex items-center gap-1 rounded-full border border-cyan-300/20 bg-cyan-500/10 px-2 py-1 text-xs text-cyan-200 hover:bg-cyan-500/20"
+                                >
+                                  <Maximize2 className="h-3 w-3" />
+                                  Maximize
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (localPdfPreviewUrl) {
+                                      setLocalPdfPreviewUrl(null);
+                                      setLocalPdfName("");
+                                    } else {
+                                      data.onUpdate?.(id, { pdfUrl: "" });
+                                    }
+                                  }}
+                                  className="inline-flex items-center gap-1 rounded-full border border-rose-300/20 bg-rose-500/10 px-2 py-1 text-xs text-rose-200 hover:bg-rose-500/20"
+                                >
+                                  <X className="h-3 w-3" />
+                                  Delete
+                                </button>
+                              </div>
                             </div>
+                            <DumbyReader
+                              pdfUrl={pdfSrc}
+                              nodeId={id}
+                              nodeTitle={data.title}
+                              viewMode="inline"
+                            />
                           </div>
-                          <DumbyReader
-                            pdfUrl={pdfSrc}
-                            nodeId={id}
-                            nodeTitle={data.title}
-                            viewMode="inline"
-                          />
-                        </div>
-                      ) : null}
+                        ) : null}
 
-                      {(data.videoUrl ?? "").trim() ? (
-                        <div className="rounded-2xl border border-cyan-300/20 bg-slate-950/20 p-2">
-                          <div className="mb-2 flex items-center justify-between gap-2">
-                            <div className="text-xs tracking-widest text-cyan-100/70">VIDEO</div>
-                            <div className="flex items-center gap-2">
+                        {(data.videoUrl ?? "").trim() ? (
+                          <div className="rounded-2xl border border-cyan-300/20 bg-slate-950/20 p-2">
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <div className="text-xs tracking-widest text-cyan-100/70">VIDEO</div>
                               <button
                                 type="button"
                                 onClick={() => data.onUpdate?.(id, { videoUrl: "" })}
                                 className="inline-flex items-center gap-1 rounded-full border border-rose-300/20 bg-rose-500/10 px-2 py-1 text-xs text-rose-200 hover:bg-rose-500/20"
-                                title="Delete video"
                               >
                                 <X className="h-3 w-3" />
                                 Delete
                               </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  window.open((data.videoUrl ?? "").trim(), "_blank", "noopener,noreferrer")
-                                }
-                                className="inline-flex items-center gap-1 rounded-full border border-rose-300/20 bg-rose-500/10 px-2 py-1 text-xs text-rose-200 hover:bg-rose-500/20"
-                                title="Open video in new tab"
-                              >
-                                <ExternalLink className="h-3 w-3" />
-                                Open
-                              </button>
                             </div>
+                            {ytEmbed ? (
+                              <iframe
+                                title="YouTube preview"
+                                src={ytEmbed}
+                                className="h-[200px] w-full rounded-xl border border-cyan-300/10 bg-black/20"
+                                loading="lazy"
+                                allowFullScreen
+                              />
+                            ) : null}
                           </div>
+                        ) : null}
+                      </div>
+                    );
+                  })()}
+                </div>
+              ) : null}
 
-                          {ytEmbed ? (
-                            <iframe
-                              title="YouTube preview"
-                              src={ytEmbed}
-                              className="h-[200px] w-full rounded-xl border border-cyan-300/10 bg-black/20"
-                              loading="lazy"
-                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                              allowFullScreen
-                            />
-                          ) : (
-                            <div className="rounded-xl border border-cyan-300/10 bg-slate-950/20 px-3 py-2 text-xs text-cyan-100/70">
-                              Not a supported YouTube URL format. This MVP only embeds YouTube; use “Open”.
-                            </div>
-                          )}
-                        </div>
-                      ) : null}
+              <div className="relative">
+                {type === "tactical" || notesEditMode || !data.notes ? (
+                  <textarea
+                    value={data.notes ?? ""}
+                    onChange={(e) => data.onUpdate?.(id, { notes: e.target.value })}
+                    onBlur={() => {
+                      if (type === "resource" && data.notes && (data.notes.includes("##") || data.notes.includes("**"))) {
+                        setTimeout(() => setNotesEditMode(false), 300);
+                      }
+                    }}
+                    placeholder={type === "resource" ? "Summary / notes…" : "Next step…"}
+                    className="min-h-[88px] min-w-[200px] w-full resize rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 text-sm text-cyan-50 outline-none placeholder:text-cyan-200/30 focus:border-cyan-200/40"
+                  />
+                ) : (
+                  <div className="group relative min-h-[88px] min-w-[200px] w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 overflow-auto resize">
+                    <div className="markdown-content text-sm text-cyan-100">
+                      <ReactMarkdown>{data.notes}</ReactMarkdown>
                     </div>
-                  );
-                })()}
-              </div>
-            ) : null}
-
-            <div className="relative">
-              {/* For tactical cards, always show textarea (no markdown preview) */}
-              {/* For resource cards, show markdown preview if notes exist and not in edit mode */}
-              {type === "tactical" || notesEditMode || !data.notes ? (
-                <textarea
-                  value={data.notes ?? ""}
-                  onChange={(e) => data.onUpdate?.(id, { notes: e.target.value })}
-                  onBlur={() => {
-                    // Auto-exit edit mode after a short delay if notes are markdown-like (resource cards only)
-                    if (type === "resource" && data.notes && (data.notes.includes("##") || data.notes.includes("**"))) {
-                      setTimeout(() => setNotesEditMode(false), 300);
-                    }
-                  }}
-                  placeholder={type === "resource" ? "Summary / notes…" : "Next step…"}
-                  className="min-h-[88px] min-w-[200px] w-full resize rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 text-sm text-cyan-50 outline-none placeholder:text-cyan-200/30 focus:border-cyan-200/40"
-                />
-              ) : (
-                <div className="group relative min-h-[88px] min-w-[200px] w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 overflow-auto resize">
-                  <div className="markdown-content text-sm text-cyan-100 [&_h2]:mt-4 [&_h2]:mb-2 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:text-cyan-50 [&_h3]:mt-3 [&_h3]:mb-2 [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:text-cyan-50 [&_p]:my-2 [&_p]:leading-relaxed [&_ul]:my-2 [&_ul]:ml-4 [&_ul]:list-disc [&_ol]:my-2 [&_ol]:ml-4 [&_ol]:list-decimal [&_li]:my-1 [&_strong]:font-semibold [&_strong]:text-cyan-50 [&_code]:bg-slate-900/50 [&_code]:text-cyan-200 [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_pre]:bg-slate-900/50 [&_pre]:text-cyan-100 [&_pre]:rounded [&_pre]:p-2 [&_pre]:overflow-x-auto [&_pre]:my-2 [&_pre_code]:bg-transparent [&_pre_code]:p-0">
-                    <ReactMarkdown>{data.notes}</ReactMarkdown>
+                    <button
+                      onClick={() => setNotesEditMode(true)}
+                      className="absolute right-2 top-2 hidden rounded bg-slate-800/80 px-2 py-1 text-xs text-cyan-200 opacity-0 transition-opacity hover:bg-slate-700/80 group-hover:opacity-100"
+                    >
+                      Edit
+                    </button>
                   </div>
+                )}
+              </div>
+
+              {type === "tactical" ? (
+                <div className="flex items-center justify-between">
+                  <AbyssalCheckbox
+                    label="Done"
+                    checked={data.status === "done"}
+                    onChange={(checked) => {
+                      data.onUpdate?.(id, { status: checked ? "done" : "todo" });
+                      if (checked) data.onTaskDone?.(id);
+                    }}
+                  />
                   <button
-                    onClick={() => setNotesEditMode(true)}
-                    className="absolute right-2 top-2 hidden rounded bg-slate-800/80 px-2 py-1 text-xs text-cyan-200 opacity-0 transition-opacity hover:bg-slate-700/80 group-hover:opacity-100"
-                    title="Edit notes"
+                    onClick={() => {
+                      setSwallowing(true);
+                      setTimeout(() => data.onDelete?.(id), 220);
+                    }}
+                    className="rounded-full border border-rose-300/20 bg-rose-500/10 px-3 py-1 text-xs text-rose-200 hover:bg-rose-500/20"
                   >
-                    Edit
+                    Swallow
                   </button>
                 </div>
-              )}
-            </div>
+              ) : null}
 
-            {type === "tactical" ? (
-              <div className="flex items-center justify-between">
-                <AbyssalCheckbox
-                  label="Done"
-                  checked={data.status === "done"}
-                  onChange={(checked) => {
-                    const wasDone = data.status === "done";
-                    const isNowDone = checked;
-                    data.onUpdate?.(id, { status: isNowDone ? "done" : "todo" });
-                    // Trigger octopus celebration only when marking as done (not when unchecking)
-                    if (!wasDone && isNowDone) {
-                      data.onTaskDone?.(id);
-                    }
-                  }}
-                />
-                <button
-                  onClick={() => {
-                    if (swallowing) return;
-                    setSwallowing(true);
-                    window.setTimeout(() => data.onDelete?.(id), 220);
-                  }}
-                  className="rounded-full border border-rose-300/20 bg-rose-500/10 px-3 py-1 text-xs text-rose-200 shadow-[0_0_14px_rgba(244,63,94,0.18)] hover:bg-rose-500/20"
-                  title="Swallow (delete)"
-                >
-                  Swallow
-                </button>
+              <div className="flex items-center justify-center gap-2 pt-2">
+                {Object.values(COLORS).map((color) => {
+                  const isSelected = (data.color || DEFAULT_COLOR) === color.hex;
+                  return (
+                    <button
+                      key={color.hex}
+                      type="button"
+                      onClick={() => {
+                        const newColor = color.hex === DEFAULT_COLOR ? undefined : color.hex;
+                        data.onUpdate?.(id, { color: newColor });
+                      }}
+                      className={[
+                        "h-5 w-5 rounded-full border-2 transition-all duration-200",
+                        isSelected ? "scale-125 border-white shadow-[0_0_8px_rgba(255,255,255,0.5)]" : "border-transparent hover:scale-110 hover:border-white/50",
+                      ].join(" ")}
+                      style={{ backgroundColor: color.hex }}
+                    />
+                  );
+                })}
               </div>
-            ) : null}
-
-            {/* Color picker */}
-            <div className="flex items-center justify-center gap-2 pt-2">
-              {Object.values(COLORS).map((color) => {
-                const isSelected = (data.color || DEFAULT_COLOR) === color.hex;
-                return (
-                  <button
-                    key={color.hex}
-                    type="button"
-                    onClick={() => {
-                      // If clicking Cyan (default), set to undefined to use default
-                      // Otherwise, set to the selected color
-                      const newColor = color.hex === DEFAULT_COLOR ? undefined : color.hex;
-                      data.onUpdate?.(id, { color: newColor });
-                    }}
-                    className={[
-                      "h-5 w-5 rounded-full border-2 transition-all duration-200",
-                      isSelected
-                        ? "scale-125 border-white shadow-[0_0_8px_rgba(255,255,255,0.5)]"
-                        : "border-transparent hover:scale-110 hover:border-white/50",
-                    ].join(" ")}
-                    style={{ backgroundColor: color.hex }}
-                    title={`Select ${color.name} color`}
-                    aria-label={`Select ${color.name} color`}
-                  />
-                );
-              })}
             </div>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
-
-

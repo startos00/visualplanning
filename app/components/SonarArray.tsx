@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { X, RotateCcw, Plus } from "lucide-react";
+import { X, RotateCcw, Plus, Sparkles } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import { DumbyReader } from "./DumbyReader";
 import type { GrimpoNode } from "@/app/lib/graph";
 import { addHighlight } from "@/app/actions/highlights";
@@ -28,6 +29,8 @@ export function SonarArray({ nodes, isOpen, onClose, onHighlight }: SonarArrayPr
   const [showManualInput, setShowManualInput] = useState(false);
   const [manualText, setManualText] = useState("");
   const [selectedNodeForManual, setSelectedNodeForManual] = useState<string>("");
+  const [comparing, setComparing] = useState(false);
+  const [comparisonResult, setComparisonResult] = useState<string | null>(null);
   const scrollSyncRefs = useRef<Map<string, HTMLIFrameElement>>(new Map());
 
   // Filter nodes that have PDFs
@@ -89,6 +92,46 @@ export function SonarArray({ nodes, isOpen, onClose, onHighlight }: SonarArrayPr
     });
   };
 
+  // Handle Dumby Compare
+  const handleDumbyCompare = async () => {
+    if (pdfNodes.length < 2) return;
+
+    setComparing(true);
+    setComparisonResult(null);
+
+    try {
+      const res = await fetch("/api/pdf/compare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pdfs: pdfNodes.map((node) => ({
+            url: node.data.pdfUrl!,
+            title: node.data.title || "Untitled Document",
+          })),
+        }),
+      });
+
+      if (res.status === 401) {
+        alert("Sign in required to compare PDFs.");
+        return;
+      }
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        alert(body?.error || "Comparison failed.");
+        return;
+      }
+
+      const body = await res.json();
+      setComparisonResult(body.comparisonMarkdown || "Comparison completed.");
+    } catch (error) {
+      console.error("Comparison error:", error);
+      alert("Comparison failed. Please try again.");
+    } finally {
+      setComparing(false);
+    }
+  };
+
   if (!isOpen || pdfNodes.length < 2) return null;
 
   return (
@@ -104,8 +147,19 @@ export function SonarArray({ nodes, isOpen, onClose, onHighlight }: SonarArrayPr
 
       {/* Main grid area */}
       <div className={`grid flex-1 gap-1 border-r border-cyan-500/20 bg-black p-4 ${getGridClass(pdfNodes.length)}`}>
-        {pdfNodes.map((node) => (
-          <div key={node.id} className="relative flex flex-col overflow-hidden rounded-xl border border-cyan-300/20 bg-slate-950/50">
+        {pdfNodes.map((node, index) => (
+          <div 
+            key={node.id} 
+            className="relative flex flex-col overflow-hidden rounded-xl border border-cyan-300/20 bg-slate-950/50"
+            style={{
+              borderRight: index < pdfNodes.length - 1 && (pdfNodes.length === 2 || pdfNodes.length === 4 || (pdfNodes.length === 3 && index < 2)) 
+                ? '1px solid rgba(34, 211, 238, 0.3)' 
+                : undefined,
+              borderBottom: pdfNodes.length === 4 && index < 2 
+                ? '1px solid rgba(34, 211, 238, 0.3)' 
+                : undefined,
+            }}
+          >
             {/* Document header */}
             <div className="flex items-center justify-between border-b border-cyan-300/10 bg-slate-950/40 px-4 py-2">
               <h3 className="truncate text-sm font-medium text-cyan-100">
@@ -160,7 +214,7 @@ export function SonarArray({ nodes, isOpen, onClose, onHighlight }: SonarArrayPr
         </div>
 
         {/* Controls */}
-        <div className="border-b border-cyan-300/10 p-4">
+        <div className="border-b border-cyan-300/10 p-4 space-y-2">
           <button
             onClick={() => setSyncScroll(!syncScroll)}
             className={`w-full rounded-lg border px-3 py-2 text-xs font-medium transition-all ${
@@ -171,6 +225,18 @@ export function SonarArray({ nodes, isOpen, onClose, onHighlight }: SonarArrayPr
           >
             <RotateCcw className="mr-2 inline h-4 w-4" />
             {syncScroll ? "Sync Scroll: ON" : "Sync Scroll: OFF"}
+          </button>
+          <button
+            onClick={handleDumbyCompare}
+            disabled={comparing || pdfNodes.length < 2}
+            className={`w-full rounded-lg border px-3 py-2 text-xs font-medium transition-all flex items-center justify-center gap-2 ${
+              comparing
+                ? "border-cyan-300/20 bg-slate-950/40 text-cyan-200/50 cursor-not-allowed"
+                : "border-orange-400/50 bg-orange-500/20 text-orange-100 hover:bg-orange-500/30"
+            }`}
+          >
+            <Sparkles className="h-4 w-4" />
+            {comparing ? "Comparing..." : "Dumby Compare"}
           </button>
         </div>
 
@@ -299,8 +365,31 @@ export function SonarArray({ nodes, isOpen, onClose, onHighlight }: SonarArrayPr
             )}
           </div>
 
+          {/* Comparison Result */}
+          {comparisonResult && (
+            <div className="border-t border-cyan-300/10 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-[10px] font-bold text-cyan-400/50 uppercase tracking-widest">
+                  Dumby Comparison
+                </div>
+                <button
+                  onClick={() => setComparisonResult(null)}
+                  className="text-cyan-300/40 hover:text-cyan-300/70 transition-colors"
+                  title="Close comparison"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+              <div className="rounded-lg border border-cyan-300/20 bg-slate-950/40 p-3 max-h-[400px] overflow-y-auto custom-scrollbar">
+                <div className="markdown-content text-xs text-cyan-100/90 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:text-cyan-50 [&_h2]:mt-3 [&_h2]:mb-2 [&_h3]:text-xs [&_h3]:font-semibold [&_h3]:text-cyan-50 [&_h3]:mt-2 [&_h3]:mb-1 [&_p]:my-1 [&_p]:leading-relaxed [&_ul]:my-2 [&_ul]:ml-4 [&_ul]:list-disc [&_ol]:my-2 [&_ol]:ml-4 [&_ol]:list-decimal [&_li]:my-1 [&_table]:w-full [&_table]:text-xs [&_table]:border-collapse [&_th]:border [&_th]:border-cyan-300/20 [&_th]:bg-slate-900/60 [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_td]:border [&_td]:border-cyan-300/20 [&_td]:px-2 [&_td]:py-1 [&_strong]:font-semibold [&_strong]:text-cyan-50">
+                  <ReactMarkdown>{comparisonResult}</ReactMarkdown>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Query input (placeholder for future AI integration) */}
-          {sharedHighlights.length > 0 && (
+          {sharedHighlights.length > 0 && !comparisonResult && (
             <div className="border-t border-cyan-300/10 p-4">
               <div className="text-[10px] font-bold text-cyan-400/50 uppercase tracking-widest mb-2">
                 Cross-Document Query

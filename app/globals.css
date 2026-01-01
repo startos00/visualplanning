@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "reactflow/dist/style.css";
+@import "react-pdf-highlighter/dist/style.css";
 
 :root {
   --background: #ffffff;
@@ -91,6 +92,17 @@ body {
 
 .octo-breath {
   animation: octoBreath 6s ease-in-out infinite;
+}
+
+/* PDF Highlighter Styles */
+.PdfHighlighter {
+  background-color: #0f172a !important;
+}
+.textLayer ::selection {
+  background: rgba(249, 115, 22, 0.4) !important;
+}
+.PdfHighlighter__highlight-layer .Highlight__part {
+  background-color: rgba(249, 115, 22, 0.4) !important;
 }
 
 /* Dumbo Octopus Celebration Animation */
