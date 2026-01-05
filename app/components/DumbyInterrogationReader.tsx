@@ -272,7 +272,9 @@ export function DumbyInterrogationReader({
     
     setIsSavingHighlight(true);
     try {
-      await addHighlight(nodeId, content, position, comment, categoryId);
+      // Ensure position is a plain object for server action serialization
+      const cleanPosition = JSON.parse(JSON.stringify(position));
+      await addHighlight(nodeId, content, cleanPosition, comment, categoryId);
       
       // Reload highlights
       const loaded = await getHighlights(nodeId);

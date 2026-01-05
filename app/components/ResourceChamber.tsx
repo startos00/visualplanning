@@ -523,7 +523,7 @@ export function ResourceChamber({ isOpen, onClose, onAddResource }: Props) {
                                       await updateHighlight(h.id, { categoryId: newCatId });
                                       getHighlights().then(setHighlights);
                                     }}
-                                    className="appearance-none bg-transparent text-[8px] font-bold text-orange-400/30 hover:text-orange-400/60 uppercase tracking-widest outline-none pr-4"
+                                    className="appearance-none bg-transparent text-[8px] font-bold text-orange-400/30 hover:text-orange-400/60 uppercase tracking-widest outline-none pr-4 py-1"
                                   >
                                     <option value="">Move to: General</option>
                                     {bookshelves.filter(s => s.id !== h.categoryId).map(s => (
@@ -535,7 +535,7 @@ export function ResourceChamber({ isOpen, onClose, onAddResource }: Props) {
                                 {h.type === "highlight" && h.nodeId !== "manual" && (
                                   <button
                                     onClick={() => handleLocateHighlight(h)}
-                                    className="text-[8px] font-bold text-orange-400/30 hover:text-orange-400/60 uppercase tracking-widest"
+                                    className="text-[8px] font-bold text-orange-400/30 hover:text-orange-400/60 uppercase tracking-widest py-1"
                                   >
                                     Navigate to source →
                                   </button>

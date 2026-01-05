@@ -53,7 +53,9 @@ export function SonarArray({ nodes, isOpen, onClose, onHighlight }: SonarArrayPr
 
     // Save to database (for Resource Chamber)
     try {
-      await addHighlight(nodeId, content, position);
+      // Ensure position is a plain object for server action serialization
+      const cleanPosition = JSON.parse(JSON.stringify(position));
+      await addHighlight(nodeId, content, cleanPosition);
     } catch (error) {
       console.error("Failed to save highlight:", error);
     }

@@ -112,7 +112,12 @@ function HomeContent() {
 
     // Set new timeout (1 second debounce)
     saveTimeoutRef.current = setTimeout(async () => {
-      const result = await saveState(nodes, edges);
+      // Deep clone to remove internal ReactFlow properties (Symbols, functions, internals)
+      // that cannot be passed to Server Functions
+      const cleanNodes = JSON.parse(JSON.stringify(nodes));
+      const cleanEdges = JSON.parse(JSON.stringify(edges));
+
+      const result = await saveState(cleanNodes, cleanEdges);
       
       if (result.success) {
         setSaveStatus("saved");
