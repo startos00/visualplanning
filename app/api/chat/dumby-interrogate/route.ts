@@ -120,22 +120,23 @@ export async function POST(request: Request) {
 
     // Enhance the last user message with context (if provided)
     const enhancedMessages = [...normalizedMessages];
-    if (enhancedMessages.length > 0 && enhancedMessages[enhancedMessages.length - 1].role === "user") {
+    const lastMessage = enhancedMessages[enhancedMessages.length - 1];
+
+    if (lastMessage.role === "user") {
       if (contextText) {
         enhancedMessages[enhancedMessages.length - 1] = {
-          ...enhancedMessages[enhancedMessages.length - 1],
-          content: `Context from document:\n"${contextText}"\n\nUser question: ${enhancedMessages[enhancedMessages.length - 1].content}`,
+          ...lastMessage,
+          content: `Context from document:\n"${contextText}"\n\nUser question: ${lastMessage.content}`,
         };
       }
     } else {
-      // If no user message, add a user message (with context if available)
-      enhancedMessages.unshift({
+      // If the last message is from the assistant, append a new user message
+      // so the model has something to respond to.
+      enhancedMessages.push({
         role: "user",
         content: contextText
-          ? `Context from document:\n"${contextText}"\n\nUser question: ${
-              (enhancedMessages[enhancedMessages.length - 1] as any)?.content || "Please analyze this text."
-            }`
-          : (enhancedMessages[enhancedMessages.length - 1] as any)?.content || "Please analyze this text.",
+          ? `Context from document:\n"${contextText}"\n\nPlease analyze this section.`
+          : "Please continue your analysis.",
       });
     }
 

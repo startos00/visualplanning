@@ -126,7 +126,20 @@ CREATE INDEX IF NOT EXISTS idx_verification_tokens_expires_at ON verification_to
 CREATE INDEX IF NOT EXISTS idx_grimpo_states_user_id ON grimpo_states(user_id);
 CREATE INDEX IF NOT EXISTS idx_pdf_summaries_user_id ON pdf_summaries(user_id);
 
--- PDF Highlights table
+-- Bookshelves table (must be created before highlights due to foreign key)
+CREATE TABLE IF NOT EXISTS bookshelves (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  color TEXT,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_bookshelves_user_id ON bookshelves(user_id);
+
+-- PDF Highlights / Snippets table
+-- This table stores both PDF highlights and manual notes (snippets)
 CREATE TABLE IF NOT EXISTS highlights (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -134,11 +147,21 @@ CREATE TABLE IF NOT EXISTS highlights (
   content TEXT NOT NULL,
   comment TEXT,
   position JSONB,
+  category_id UUID REFERENCES bookshelves(id) ON DELETE SET NULL,
+  title TEXT,
+  type TEXT NOT NULL DEFAULT 'highlight',
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-  UNIQUE (user_id, node_id, content)
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+-- Indexes for highlights
 CREATE INDEX IF NOT EXISTS idx_highlights_user_id ON highlights(user_id);
 CREATE INDEX IF NOT EXISTS idx_highlights_node_id ON highlights(node_id);
+CREATE INDEX IF NOT EXISTS idx_highlights_category_id ON highlights(category_id);
+CREATE INDEX IF NOT EXISTS idx_highlights_type ON highlights(type);
+
+-- Note: We don't enforce a unique constraint here to allow:
+-- 1. Manual notes (snippets) to be duplicated (same content in different categories)
+-- 2. Users to save the same highlight multiple times if needed
+-- Application-level deduplication can be added if needed
 

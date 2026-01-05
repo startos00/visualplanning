@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { X, Send, Lightbulb, CheckSquare, AlertCircle, MessageSquare, List, Bookmark, Trash2 } from "lucide-react";
+import { X, Send, Lightbulb, CheckSquare, AlertCircle, MessageSquare, List, Bookmark, Trash2, ChevronDown, FolderPlus } from "lucide-react";
 import { useChat, Chat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import ReactMarkdown from "react-markdown";
 import { getHighlights, addHighlight, deleteHighlight } from "@/app/actions/highlights";
-import type { Highlight } from "@/app/lib/db/schema";
+import { getBookshelves } from "@/app/actions/bookshelves";
+import type { Highlight, Bookshelf } from "@/app/lib/db/schema";
 
 // Import from react-pdf-highlighter
 // Note: User needs to run `npm install react-pdf-highlighter`
@@ -48,6 +49,8 @@ export function DumbyInterrogationReader({
   const [activeSidebarTab, setActiveSidebarTab] = useState<"chat" | "snippets">("chat");
   const [pendingComment, setPendingComment] = useState<string>("");
   const [isSavingHighlight, setIsSavingHighlight] = useState(false);
+  const [bookshelves, setBookshelves] = useState<Bookshelf[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const scrollViewerTo = useRef<((highlight: any) => void) | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const commentInputRef = useRef<HTMLTextAreaElement>(null);
@@ -124,18 +127,44 @@ export function DumbyInterrogationReader({
   }, [pdfUrl]);
 
 
-  // Load highlights on mount
   useEffect(() => {
-    async function loadHighlights() {
+    async function loadData() {
       try {
-        const loaded = await getHighlights(nodeId);
-        setHighlights(loaded);
+        const [loadedHighlights, loadedBookshelves] = await Promise.all([
+          getHighlights(nodeId),
+          getBookshelves()
+        ]);
+        setHighlights(loadedHighlights);
+        setBookshelves(loadedBookshelves);
       } catch (e) {
-        console.error("Failed to load highlights:", e);
+        console.error("Failed to load data:", e);
       }
     }
-    loadHighlights();
+    loadData();
   }, [nodeId]);
+
+  // Listen for highlight deletion events to refresh highlights
+  useEffect(() => {
+    const handleHighlightDeleted = async () => {
+      // Refresh highlights when any highlight is deleted
+      try {
+        const loadedHighlights = await getHighlights(nodeId);
+        setHighlights(loadedHighlights);
+        // Clear focused highlight if it was deleted
+        if (focusedHighlightId && !loadedHighlights.find(h => h.id === focusedHighlightId)) {
+          setFocusedHighlightId(null);
+          setFocusedSnippet("");
+        }
+      } catch (e) {
+        console.error("Failed to refresh highlights after deletion:", e);
+      }
+    };
+
+    window.addEventListener('highlightDeleted', handleHighlightDeleted);
+    return () => {
+      window.removeEventListener('highlightDeleted', handleHighlightDeleted);
+    };
+  }, [nodeId, focusedHighlightId]);
 
   // Debug: Log PDF URL and container dimensions
   useEffect(() => {
@@ -238,12 +267,12 @@ export function DumbyInterrogationReader({
   }, [safeSendMessage]);
 
   // Save highlight
-  const handleSaveHighlight = useCallback(async (content: string, position: any, comment?: string) => {
+  const handleSaveHighlight = useCallback(async (content: string, position: any, comment?: string, categoryId?: string) => {
     if (isSavingHighlight) return; // Prevent double-clicks
     
     setIsSavingHighlight(true);
     try {
-      await addHighlight(nodeId, content, position, comment);
+      await addHighlight(nodeId, content, position, comment, categoryId);
       
       // Reload highlights
       const loaded = await getHighlights(nodeId);
@@ -274,11 +303,13 @@ export function DumbyInterrogationReader({
           setFocusedHighlightId(null);
           setFocusedSnippet("");
         }
+        // Dispatch event so ResourceChamber can refresh
+        window.dispatchEvent(new CustomEvent('highlightDeleted', { detail: { highlightId: id } }));
       }
     } catch (error) {
       console.error("Failed to delete highlight:", error);
     }
-  }, [focusedHighlightId, deleteHighlight]);
+  }, [focusedHighlightId]);
 
   // Handle chat submit with context
   const handleChatSubmit = useCallback(
@@ -464,6 +495,22 @@ export function DumbyInterrogationReader({
                               Archive Snippet
                             </label>
                             <div className="space-y-3">
+                              <div className="space-y-1.5">
+                                <label className="block text-[8px] font-bold uppercase tracking-widest text-orange-400/40">Shelf Category</label>
+                                <div className="relative">
+                                  <select 
+                                    value={selectedCategoryId || ""}
+                                    onChange={(e) => setSelectedCategoryId(e.target.value || null)}
+                                    className="w-full appearance-none rounded-xl border border-white/5 bg-white/5 px-3 py-2 text-[10px] text-orange-100 outline-none transition-all focus:border-cyan-500/30"
+                                  >
+                                    <option value="">General / Uncategorized</option>
+                                    {bookshelves.map(shelf => (
+                                      <option key={shelf.id} value={shelf.id}>{shelf.name}</option>
+                                    ))}
+                                  </select>
+                                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-orange-400/30" />
+                                </div>
+                              </div>
                               <textarea
                                 ref={commentInputRef}
                                 value={pendingComment}
@@ -475,7 +522,7 @@ export function DumbyInterrogationReader({
                                   // Keep the Cmd+Enter shortcut
                                   if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
                                     e.preventDefault();
-                                    handleSaveHighlight(selectedTextContent, position, pendingComment.trim() || undefined);
+                                    handleSaveHighlight(selectedTextContent, position, pendingComment.trim() || undefined, selectedCategoryId || undefined);
                                     hideTipAndSelection();
                                   }
                                 }}
@@ -486,7 +533,7 @@ export function DumbyInterrogationReader({
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleSaveHighlight(selectedTextContent, position, pendingComment.trim() || undefined);
+                                    handleSaveHighlight(selectedTextContent, position, pendingComment.trim() || undefined, selectedCategoryId || undefined);
                                     hideTipAndSelection();
                                   }}
                                   disabled={isSavingHighlight}

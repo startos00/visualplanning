@@ -2,7 +2,7 @@
 // Run the SQL from schema.sql in Neon console - do NOT use drizzle-kit migrations
 // This file contains TypeScript definitions for Drizzle queries only
 
-import { pgTable, text, jsonb, integer, timestamp, varchar, primaryKey, uuid, serial, boolean, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, jsonb, integer, timestamp, varchar, primaryKey, uuid, serial, boolean, uniqueIndex, index } from "drizzle-orm/pg-core";
 import type { Edge, Viewport } from "reactflow";
 import type { GrimpoNode, ModeSetting } from "../graph";
 import type { AbyssalInventory, AbyssalPlacedItem } from "../abyssalGarden";
@@ -148,7 +148,8 @@ export const pdfSummaries = pgTable(
   }),
 );
 
-// PDF Highlights table
+// PDF Highlights / Snippets table
+// Stores both PDF highlights and manual notes (snippets)
 export const highlights = pgTable(
   "highlights",
   {
@@ -162,13 +163,30 @@ export const highlights = pgTable(
       rects: any[];
       pageNumber: number;
     }>(),
+    categoryId: uuid("category_id").references(() => bookshelves.id, { onDelete: "set null" }),
+    title: text("title"),
+    type: text("type").notNull().default("highlight"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => ({
-    userNodeHighlightUnique: uniqueIndex("highlights_user_node_content_unique").on(table.userId, table.nodeId, table.content),
+    // Note: The unique constraint is handled via a partial unique index in SQL
+    // (only applies to PDF highlights, not manual notes)
+    // This allows manual notes to be duplicated
+    categoryIdIdx: index("idx_highlights_category_id").on(table.categoryId),
+    typeIdx: index("idx_highlights_type").on(table.type),
   }),
 );
+
+// Bookshelves table
+export const bookshelves = pgTable("bookshelves", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  color: text("color"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
 
 export type GraphState = typeof graphStates.$inferSelect;
 export type NewGraphState = typeof graphStates.$inferInsert;
@@ -188,4 +206,6 @@ export type PdfSummary = typeof pdfSummaries.$inferSelect;
 export type NewPdfSummary = typeof pdfSummaries.$inferInsert;
 export type Highlight = typeof highlights.$inferSelect;
 export type NewHighlight = typeof highlights.$inferInsert;
+export type Bookshelf = typeof bookshelves.$inferSelect;
+export type NewBookshelf = typeof bookshelves.$inferInsert;
 

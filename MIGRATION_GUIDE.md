@@ -32,23 +32,29 @@ npm install drizzle-orm @neondatabase/serverless drizzle-kit
 
 ## Database Migration
 
-1. **Generate Migration Files**:
-   ```bash
-   npm run db:generate
-   ```
-   This creates migration files in the `drizzle` directory.
+**IMPORTANT**: This project uses manual SQL migrations. Run the SQL from `schema.sql` directly in your Neon console.
 
-2. **Apply Migrations**:
-   ```bash
-   npm run db:push
-   ```
-   This pushes the schema to your Neon database.
+1. **Open Neon Console**:
+   - Go to https://console.neon.tech/
+   - Select your project
+   - Open the SQL Editor
 
-   Alternatively, you can use:
-   ```bash
-   npm run db:migrate
-   ```
-   This runs the migration files.
+2. **Run the Schema SQL**:
+   - Copy the entire contents of `schema.sql`
+   - Paste into the SQL Editor
+   - Execute the SQL
+
+   This will create all necessary tables including:
+   - `users`, `sessions`, `accounts` (Better-Auth tables)
+   - `graph_states` (Canvas state)
+   - `abyssal_garden_states` (Abyssal Garden state)
+   - `pdf_summaries` (PDF summaries)
+   - `highlights` (PDF highlights and manual snippets/notes)
+   - `bookshelves` (Snippet categories)
+
+3. **Verify Tables Created**:
+   - Check that all tables exist in your database
+   - Ensure indexes are created properly
 
 3. **View Database** (Optional):
    ```bash

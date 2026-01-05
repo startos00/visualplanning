@@ -5,6 +5,9 @@ import { Minimize2, Maximize2, Send } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { GrimpoNodeData } from "@/app/lib/graph";
 import { addHighlight } from "@/app/actions/highlights";
+import { getBookshelves } from "@/app/actions/bookshelves";
+import type { Bookshelf } from "@/app/lib/db/schema";
+import { ChevronDown, FolderPlus } from "lucide-react";
 
 type ViewMode = "inline" | "bathysphere" | "compact";
 
@@ -44,8 +47,16 @@ export function DumbyReader({
   const [showManualInput, setShowManualInput] = useState(false);
   const [manualText, setManualText] = useState("");
   const [pendingHighlight, setPendingHighlight] = useState<{ text: string; position: any } | null>(null);
+  const [bookshelves, setBookshelves] = useState<Bookshelf[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const selectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSentRef = useRef<string>("");
+
+  useEffect(() => {
+    if (showSaveHighlightPopup) {
+      getBookshelves().then(setBookshelves);
+    }
+  }, [showSaveHighlightPopup]);
 
   // Handle scroll sync
   useEffect(() => {
@@ -103,7 +114,7 @@ export function DumbyReader({
 
     try {
       // Save to database (for Resource Chamber)
-      await addHighlight(nodeId, pendingHighlight.text, pendingHighlight.position);
+      await addHighlight(nodeId, pendingHighlight.text, pendingHighlight.position, undefined, selectedCategoryId || undefined);
       
       // Send to shared intelligence (for Sonar Array)
       onHighlight?.(pendingHighlight.text, pendingHighlight.position);
@@ -447,6 +458,25 @@ export function DumbyReader({
                   </p>
                 )}
               </div>
+
+              {/* Category Selection */}
+              <div className="mb-4">
+                <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-widest text-cyan-400/60">Save to Bookshelf</label>
+                <div className="relative">
+                  <select 
+                    value={selectedCategoryId || ""}
+                    onChange={(e) => setSelectedCategoryId(e.target.value || null)}
+                    className="w-full appearance-none rounded-xl border border-cyan-300/20 bg-slate-900/60 px-4 py-2 text-xs text-cyan-50 outline-none focus:border-cyan-400/50"
+                  >
+                    <option value="">General / Uncategorized</option>
+                    {bookshelves.map(shelf => (
+                      <option key={shelf.id} value={shelf.id}>{shelf.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-300/40" />
+                </div>
+              </div>
+
               <div className="flex gap-3">
                 <button
                   onClick={handleSaveHighlight}
@@ -646,6 +676,25 @@ export function DumbyReader({
                         "{pendingHighlight.text}"
                       </p>
                     </div>
+
+                    {/* Category Selection */}
+                    <div className="mb-6">
+                      <label className="mb-2 block text-[11px] font-bold uppercase tracking-widest text-cyan-400/60">Save to Bookshelf</label>
+                      <div className="relative">
+                        <select 
+                          value={selectedCategoryId || ""}
+                          onChange={(e) => setSelectedCategoryId(e.target.value || null)}
+                          className="w-full appearance-none rounded-xl border border-cyan-300/20 bg-slate-900/60 px-5 py-3 text-sm text-cyan-50 outline-none focus:border-cyan-400/50"
+                        >
+                          <option value="">General / Uncategorized</option>
+                          {bookshelves.map(shelf => (
+                            <option key={shelf.id} value={shelf.id}>{shelf.name}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-cyan-300/40" />
+                      </div>
+                    </div>
+
                     <div className="flex gap-4">
                       <button
                         onClick={handleSaveHighlight}

@@ -31,7 +31,7 @@ export async function getHighlights(nodeId?: string) {
   }
 }
 
-export async function addHighlight(nodeId: string, content: string, position: any, comment?: string) {
+export async function addHighlight(nodeId: string, content: string, position: any, comment?: string, categoryId?: string, title?: string, type: string = "highlight") {
   try {
     const session = await auth.api.getSession({ headers: await headers() });
     if (!session) return { success: false, error: "Unauthorized" };
@@ -39,21 +39,18 @@ export async function addHighlight(nodeId: string, content: string, position: an
     const userId = session.user.id;
     const now = new Date();
 
+    // Insert snippet/highlight (duplicates allowed for flexibility)
     await db.insert(highlights).values({
       userId,
       nodeId,
       content,
       position,
       comment,
+      categoryId,
+      title,
+      type,
       createdAt: now,
       updatedAt: now,
-    }).onConflictDoUpdate({
-      target: [highlights.userId, highlights.nodeId, highlights.content],
-      set: {
-        position,
-        comment,
-        updatedAt: now,
-      }
     });
 
     return { success: true };
@@ -61,6 +58,35 @@ export async function addHighlight(nodeId: string, content: string, position: an
     console.error("Error adding highlight:", error);
     return { success: false, error: "Failed to add highlight" };
   }
+}
+
+export async function updateHighlight(id: string, updates: { content?: string, comment?: string, categoryId?: string | null, title?: string }) {
+  try {
+    const session = await auth.api.getSession({ headers: await headers() });
+    if (!session) return { success: false, error: "Unauthorized" };
+
+    const userId = session.user.id;
+    const now = new Date();
+
+    await db.update(highlights).set({
+      ...updates,
+      updatedAt: now,
+    }).where(
+      and(
+        eq(highlights.id, id),
+        eq(highlights.userId, userId)
+      )
+    );
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating highlight:", error);
+    return { success: false, error: "Failed to update highlight" };
+  }
+}
+
+export async function addNote(nodeId: string, content: string, categoryId?: string, title?: string) {
+  return addHighlight(nodeId, content, null, undefined, categoryId, title, "note");
 }
 
 export async function deleteHighlight(id: string) {
