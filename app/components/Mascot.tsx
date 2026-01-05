@@ -1,6 +1,8 @@
 "use client";
 
-import { useId } from "react";
+import { useId, useState, useEffect } from "react";
+import { useOxygenTank } from "@/app/lib/hooks/useOxygenTank";
+import { OxygenTankGauge } from "./OxygenTankGauge";
 
 export type MascotVariant = "dumbo" | "dumby" | "grimpy";
 
@@ -8,6 +10,7 @@ export type MascotProps = {
   variant: MascotVariant;
   size?: number;
   className?: string;
+  showOxygenTank?: boolean;
 };
 
 function sanitizeSvgId(id: string) {
@@ -16,7 +19,18 @@ function sanitizeSvgId(id: string) {
 }
 
 export function Mascot(props: MascotProps) {
-  const { variant, size = 64, className } = props;
+  const { variant, size = 64, className, showOxygenTank = false } = props;
+
+  const { status, isPinned } = useOxygenTank();
+  const [isShaking, setIsShaking] = useState(false);
+
+  useEffect(() => {
+    if (status === "completed") {
+      setIsShaking(true);
+      const timer = setTimeout(() => setIsShaking(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [status]);
 
   const uid = sanitizeSvgId(useId());
   const glowSoftId = `grimpyGlowSoft-${uid}`;
@@ -31,15 +45,33 @@ export function Mascot(props: MascotProps) {
 
   return (
     <span className={["group relative inline-block select-none", className].filter(Boolean).join(" ")}>
-      {/* Cross-browser hover label (SVG <title> tooltips are inconsistent, especially in Safari) */}
+      {/* Oxygen Tank Gauge - Positioned above the mascot, shifted slightly right */}
+      {showOxygenTank && variant === "dumbo" && (
+        <div
+          className={[
+            "absolute bottom-full left-0 mb-2 w-48 transition-all duration-200 z-50",
+            // This invisible bridge (before:...) ensures the hover state isn't lost in the gap
+            "before:absolute before:-bottom-2 before:left-0 before:right-0 before:h-2 before:content-['']",
+            isPinned 
+              ? "opacity-100 pointer-events-auto" 
+              : "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 delay-75 group-hover:delay-0",
+          ].join(" ")}
+          style={isPinned ? { opacity: 1, pointerEvents: "auto" } : {}}
+        >
+          <OxygenTankGauge />
+        </div>
+      )}
+
+      {/* Cross-browser hover label */}
       <span
         className={[
           "pointer-events-none absolute left-1/2 top-0 z-10",
           "-translate-x-1/2 -translate-y-2",
           "whitespace-nowrap rounded-md bg-slate-900/80 px-2 py-1 text-[11px] leading-none text-white",
           "opacity-0 shadow-sm backdrop-blur-sm transition-opacity duration-150",
-          "group-hover:opacity-100",
+          (showOxygenTank && variant === "dumbo") ? "hidden" : "group-hover:opacity-100",
         ].join(" ")}
+        style={(showOxygenTank && variant === "dumbo") ? { display: "none" } : {}}
       >
         {hello}
       </span>
@@ -47,7 +79,7 @@ export function Mascot(props: MascotProps) {
         width={size}
         height={size}
         viewBox="0 0 64 64"
-        className="block"
+        className={["block", isShaking ? "animate-shake" : ""].join(" ")}
         role="img"
         aria-label={`${hello} (${role})`}
         focusable="false"

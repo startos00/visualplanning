@@ -5,15 +5,14 @@ GRIMPO AI AGENTS — The Deep Sea Hierarchy (AI SDK)
 
 ## Goal
 Introduce a **manual-select, multi-agent** assistant system (“GRIMPO”) powered by **Vercel AI SDK tool calling** so users can explicitly choose an agent persona and capability set to:
-- manage tasks + reduce stress (Dumbo),
+- manage tasks, reduce stress, and break through inertia (Dumbo),
 - process resources into actionable notes (Dumby),
-- generate strategic plans and connect goals to execution (Grimpy).
+- generate strategic plans, connect goals to execution, and bust through cognitive blocks (Grimpy).
 
 The system must support:
-- **Vercel AI SDK** (`ai`, `@ai-sdk/openai`, `zod`)
+- **Vercel AI SDK** (`ai`, `@ai-sdk/google`, `zod`)
 - Model selection:
-  - **GPT-4o** for higher quality/reasoning
-  - **GPT-4o-mini** for speed
+  - **Gemini 3.0 Flash** for speed and high-quality tool calling
 - **Immediate apply** mutations to the canvas (with **Undo** as a first-class requirement).
 
 ## User Story
@@ -34,9 +33,9 @@ As a user, I want to choose between specialized AI agents (Dumbo, Dumby, Grimpy)
 - The agent runtime must use **Vercel AI SDK tool calling**.
 - Each tool must have a **Zod schema** for inputs and outputs.
 - Tools must be exposed **only** to the agent(s) that own them:
-  - Dumbo: `checkDeadlines`, `groupTasks`, `setReminder`, `prioritizeTasks`, `triggerDance`
+  - Dumbo: `checkDeadlines`, `groupTasks`, `setReminder`, `prioritizeTasks`, `triggerDance`, `startOxygenTank`
   - Dumby: `summarizePDF`, `summarizeVideo`, `extractHighlights`, `manageQueue`
-  - Grimpy: `generateProjectPlan`, `linkStrategyToResources`, `suggestResources`, `groupSimilarTasks`
+  - Grimpy: `generateProjectPlan`, `linkStrategyToResources`, `suggestResources`, `groupSimilarTasks`, `sonarPing`, `lateralDrift`
 - If a model attempts to call a tool outside its allowed set, the system must reject the call and return a clear error message.
 
 ### 3. Shared Guardrails (Limits, Logging, Streaming)
@@ -65,10 +64,10 @@ As a user, I want to choose between specialized AI agents (Dumbo, Dumby, Grimpy)
 ## Agent Specs
 
 ### Level 1: Dumbo (The Intern)
-**Role**: Internal task management & emotional support.  
+**Role**: Internal task management, emotional support, and **"Inertia Breaker"**.  
 **Vibe**: Eager, high-energy, helpful.  
 **System Prompt**:  
-“You are Dumbo, an eager Dumbo Octopus intern in the Abyssal Zone. You love helping with small tasks. You speak cheerfully. Your main job is to track deadlines and keep the user happy. If the user is stressed, offer to dance.”
+“You are Dumbo, an eager Dumbo Octopus intern in the Abyssal Zone. You love helping with small tasks. You speak cheerfully. Your main job is to track deadlines, keep the user happy, and break through inertia. If the user is stressed, offer to dance. If they are stuck, suggest a 'Dive' with the Oxygen Tank.”
 
 #### Dumbo Tools
 1. **checkDeadlines**
@@ -94,6 +93,14 @@ As a user, I want to choose between specialized AI agents (Dumbo, Dumby, Grimpy)
 
 5. **triggerDance**
    - Trigger a UI-only bounce animation on the Dumbo mascot (no board mutation required).
+
+6. **startOxygenTank** (The "Inertia Breaker")
+   - **Concept**: Standard timers are stressful. Dumbo offers a visual "Air Supply" for deep work.
+   - **Mechanism**: A small gauge on the Dumbo card. User sets a "Dive Time" (e.g., 45 mins).
+   - **Visuals**: The gauge slowly depletes from Green to Red.
+   - **Value**: Visualizes time as a resource (oxygen) rather than a constraint to prevent "time blindness".
+   - **Completion**: When it hits 0%, Dumbo shakes to signal "Surface for air!".
+   - **Implementation**: Simple `setInterval` reducing width of a CSS bar.
 
 ---
 
@@ -132,10 +139,10 @@ As a user, I want to choose between specialized AI agents (Dumbo, Dumby, Grimpy)
 ---
 
 ### Level 3: Grimpy (The Architect)
-**Role**: Strategic planning & meta-cognition.  
+**Role**: Strategic planning, meta-cognition, and **"Block Buster"**.  
 **Vibe**: Cryptic, deep, wise, minimalist.  
 **System Prompt**:  
-“You are Grimpy, the Ancient Architect of the Deep. You do not deal with trifles. You see the big picture. You connect strategy to execution. You guide the user in planning complex projects and link disparate ideas.”
+“You are Grimpy, the Ancient Architect of the Deep. You do not deal with trifles. You see the big picture. You connect strategy to execution. You guide the user in planning complex projects, link disparate ideas, and bust through cognitive blocks. When the user is stuck, use Socratic questioning or lateral thinking.”
 
 #### Grimpy Tools
 1. **generateProjectPlan**
@@ -158,6 +165,16 @@ As a user, I want to choose between specialized AI agents (Dumbo, Dumby, Grimpy)
 4. **groupSimilarTasks**
    - Semantically analyze tasks on the board and cluster/connect related nodes.
    - Must avoid re-grouping already clustered items unless it improves grouping measurably.
+
+5. **sonarPing** (The Void Mirror)
+   - **Concept**: Reflection over answers. Socratic questioning to force deeper engagement.
+   - **Action**: Input a selected node's content; Grimpy generates a challenging, reflective question (e.g., "What is the single highest risk to this strategy?").
+   - **Value**: Breaks "Writer's Block" by forcing the brain to engage deeper.
+
+6. **lateralDrift** (Oblique Strategies)
+   - **Concept**: Sparking creativity via randomness and divergent thinking.
+   - **Action**: Identify a random node from a distant part of the canvas and connect it to the current active node with a dashed line labeled "Synthesis?".
+   - **Value**: Mimics subconscious creativity by colliding two unrelated concepts.
 
 ## Data Requirements
 
@@ -209,9 +226,9 @@ As a user, I want to choose between specialized AI agents (Dumbo, Dumby, Grimpy)
 2. ✅ Each tool call validates inputs/outputs with Zod schemas.
 3. ✅ Tools cannot be called by unauthorized agents (capability gating enforced).
 4. ✅ Tool-driven board mutations apply immediately and are undoable.
-5. ✅ Dumbo can detect deadlines, prioritize tasks, set reminders, and group tasks by tag.
+5. ✅ Dumbo can detect deadlines, prioritize tasks, set reminders, group tasks by tag, and manage the Oxygen Tank timer.
 6. ✅ Dumby can produce a structured PDF summary and video takeaways and persist highlights in the Resource Chamber.
-7. ✅ Grimpy can generate a project plan template and link goals to relevant resources without creating duplicate edges.
+7. ✅ Grimpy can generate a project plan template, link goals to relevant resources, perform Sonar Pings (questions), and trigger Lateral Drifts (random synthesis).
 8. ✅ Errors (missing transcript, OCR failure, model/tool errors) produce clear user-facing messages and do not corrupt board state.
 
 ## Edge Cases

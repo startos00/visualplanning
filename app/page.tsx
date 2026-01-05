@@ -611,7 +611,12 @@ function HomeContent() {
           <div className="mb-2 text-[11px] tracking-widest text-cyan-100/70">MASCOTS</div>
           <div className="flex items-center gap-3">
             <div className="flex flex-col items-center gap-1">
-              <Mascot variant="dumbo" size={44} className="drop-shadow-[0_0_10px_rgba(250,204,21,0.12)]" />
+              <Mascot
+                variant="dumbo"
+                size={44}
+                className="drop-shadow-[0_0_10px_rgba(250,204,21,0.12)]"
+                showOxygenTank={true}
+              />
               <div className="text-[10px] text-cyan-50/70">Intern</div>
             </div>
             <div className="flex flex-col items-center gap-1">
