@@ -11,6 +11,7 @@ export type MascotProps = {
   size?: number;
   className?: string;
   showOxygenTank?: boolean;
+  theme?: "abyss" | "surface";
 };
 
 function sanitizeSvgId(id: string) {
@@ -19,7 +20,9 @@ function sanitizeSvgId(id: string) {
 }
 
 export function Mascot(props: MascotProps) {
-  const { variant, size = 64, className, showOxygenTank = false } = props;
+  const { variant, size = 64, className, showOxygenTank = false, theme = "abyss" } = props;
+
+  const isSurface = theme === "surface";
 
   const { status, isPinned } = useOxygenTank();
   const [isShaking, setIsShaking] = useState(false);
@@ -121,40 +124,42 @@ export function Mascot(props: MascotProps) {
             <g className="animate-pulse">
               <path
                 d="M14 26 C8 24, 8 36, 15 34 C18 33, 18 28, 14 26 Z"
-                className="fill-yellow-200"
+                className={isSurface ? "fill-yellow-400 stroke-slate-900" : "fill-yellow-200"}
+                strokeWidth={isSurface ? 1.5 : 0}
               />
               <path
                 d="M50 26 C56 24, 56 36, 49 34 C46 33, 46 28, 50 26 Z"
-                className="fill-yellow-200"
+                className={isSurface ? "fill-yellow-400 stroke-slate-900" : "fill-yellow-200"}
+                strokeWidth={isSurface ? 1.5 : 0}
               />
             </g>
 
             {/* Mantle */}
             <path
               d="M32 10 C22 10, 14 18, 14 29 C14 41, 23 50, 32 50 C41 50, 50 41, 50 29 C50 18, 42 10, 32 10 Z"
-              className="fill-yellow-300 stroke-slate-900/15"
-              strokeWidth="1"
+              className={isSurface ? "fill-yellow-400 stroke-slate-900" : "fill-yellow-300 stroke-slate-900/15"}
+              strokeWidth={isSurface ? 2 : 1}
             />
 
             {/* Tentacles + webbing */}
-            <g className="fill-yellow-200 stroke-slate-900/10" strokeWidth="1">
+            <g className={isSurface ? "fill-yellow-400 stroke-slate-900" : "fill-yellow-200 stroke-slate-900/10"} strokeWidth={isSurface ? 1.5 : 1}>
               <path d="M20 44 C18 52, 22 56, 25 54 C27 52, 25 48, 24 44 Z" />
               <path d="M26 46 C25 54, 29 57, 31 55 C33 53, 31 49, 30 46 Z" />
               <path d="M34 46 C33 54, 37 57, 39 55 C41 53, 39 49, 38 46 Z" />
               <path d="M40 44 C39 52, 43 56, 46 54 C48 52, 46 48, 44 44 Z" />
-              <path d="M20 44 C25 48, 39 48, 44 44" className="fill-yellow-200/70" />
+              <path d="M20 44 C25 48, 39 48, 44 44" className={isSurface ? "fill-yellow-300" : "fill-yellow-200/70"} />
             </g>
 
             {/* Face */}
             <g>
-              <circle cx="25" cy="28" r="6" className="fill-white/95" />
-              <circle cx="39" cy="28" r="6" className="fill-white/95" />
-              <circle cx="26.5" cy="29.5" r="2" className="fill-slate-900/80" />
-              <circle cx="40.5" cy="29.5" r="2" className="fill-slate-900/80" />
+              <circle cx="25" cy="28" r="6" className="fill-white" stroke={isSurface ? "#0f172a" : "none"} strokeWidth="1" />
+              <circle cx="39" cy="28" r="6" className="fill-white" stroke={isSurface ? "#0f172a" : "none"} strokeWidth="1" />
+              <circle cx="26.5" cy="29.5" r="2" className="fill-slate-900" />
+              <circle cx="40.5" cy="29.5" r="2" className="fill-slate-900" />
               <path
                 d="M28 36 C30 38, 34 38, 36 36"
-                className="stroke-slate-900/60"
-                strokeWidth="1.5"
+                className="stroke-slate-900"
+                strokeWidth="2"
                 fill="none"
                 strokeLinecap="round"
               />
@@ -165,82 +170,100 @@ export function Mascot(props: MascotProps) {
         ) : safeVariant === "dumby" ? (
           <g className="animate-[pulse_4s_infinite]">
             {/* Ear fins (more rigid) */}
-            <path d="M14 26 L8 30 L14 34 Z" className="fill-orange-300" />
-            <path d="M50 26 L56 30 L50 34 Z" className="fill-orange-300" />
+            <path d="M14 26 L8 30 L14 34 Z" className={isSurface ? "fill-orange-500 stroke-slate-900" : "fill-orange-300"} strokeWidth={isSurface ? 1.5 : 0} />
+            <path d="M50 26 L56 30 L50 34 Z" className={isSurface ? "fill-orange-500 stroke-slate-900" : "fill-orange-300"} strokeWidth={isSurface ? 1.5 : 0} />
 
             {/* Mantle (taller + squarer) */}
             <path
               d="M22 12 H42 C47 12, 50 18, 50 26 V34 C50 44, 42 52, 32 52 C22 52, 14 44, 14 34 V26 C14 18, 17 12, 22 12 Z"
-              className="fill-orange-400 stroke-slate-900/18"
-              strokeWidth="1"
+              className={isSurface ? "fill-orange-500 stroke-slate-900" : "fill-orange-400 stroke-slate-900/18"}
+              strokeWidth={isSurface ? 2 : 1}
             />
 
             {/* Tentacles */}
-            <g className="fill-orange-300 stroke-slate-900/12" strokeWidth="1">
+            <g className={isSurface ? "fill-orange-500 stroke-slate-900" : "fill-orange-300 stroke-slate-900/12"} strokeWidth={isSurface ? 1.5 : 1}>
               <path d="M19 44 C18 52, 22 56, 25 54 C27 52, 25 48, 24 44 Z" />
               <path d="M26 46 C25 54, 29 57, 31 55 C33 53, 31 49, 30 46 Z" />
               <path d="M34 46 C33 54, 37 57, 39 55 C41 53, 39 49, 38 46 Z" />
               <path d="M41 44 C40 52, 44 56, 47 54 C49 52, 47 48, 46 44 Z" />
-              <path d="M19 44 C25 48, 39 48, 46 44" className="fill-orange-300/70" />
+              <path d="M19 44 C25 48, 39 48, 46 44" className={isSurface ? "fill-orange-400" : "fill-orange-300/70"} />
             </g>
 
             {/* Face: focused squint + straight mouth */}
             <g>
-              <circle cx="25" cy="28" r="5.5" className="fill-white/95" />
-              <circle cx="39" cy="28" r="5.5" className="fill-white/95" />
-              <circle cx="26.5" cy="29.5" r="1.8" className="fill-slate-900/80" />
-              <circle cx="40.5" cy="29.5" r="1.8" className="fill-slate-900/80" />
+              <circle cx="25" cy="28" r="5.5" className="fill-white" stroke={isSurface ? "#0f172a" : "none"} strokeWidth="1" />
+              <circle cx="39" cy="28" r="5.5" className="fill-white" stroke={isSurface ? "#0f172a" : "none"} strokeWidth="1" />
+              <circle cx="26.5" cy="29.5" r="1.8" className="fill-slate-900" />
+              <circle cx="40.5" cy="29.5" r="1.8" className="fill-slate-900" />
               {/* Rectangular eyelids */}
-              <rect x="19.5" y="23.8" width="11" height="3.3" rx="1" className="fill-orange-500/70" />
-              <rect x="33.5" y="23.8" width="11" height="3.3" rx="1" className="fill-orange-500/70" />
+              <rect x="19.5" y="23.8" width="11" height="3.3" rx="1" className={isSurface ? "fill-slate-800/20" : "fill-orange-500/70"} />
+              <rect x="33.5" y="23.8" width="11" height="3.3" rx="1" className={isSurface ? "fill-slate-800/20" : "fill-orange-500/70"} />
               <path
                 d="M26 37 H38"
-                className="stroke-slate-900/55"
-                strokeWidth="1.5"
+                className="stroke-slate-900"
+                strokeWidth="2"
                 fill="none"
                 strokeLinecap="round"
               />
             </g>
 
             {/* Tie / badge */}
-            <path d="M32 52 L28.5 58 L35.5 58 Z" className="fill-red-500/80" />
+            <path d="M32 52 L28.5 58 L35.5 58 Z" className="fill-red-600" stroke={isSurface ? "#0f172a" : "none"} strokeWidth="1" />
           </g>
         ) : (
-          <g className="animate-[bounce_6s_infinite] opacity-70 transition-opacity duration-300 group-hover:opacity-100">
+          <g className={isSurface ? "" : "animate-[bounce_6s_infinite] opacity-70 transition-opacity duration-300 group-hover:opacity-100"}>
             {/* Ear fins */}
-            <path d="M14 26 C8 24, 8 36, 15 34 C18 33, 18 28, 14 26 Z" className="fill-cyan-800/20" />
-            <path d="M50 26 C56 24, 56 36, 49 34 C46 33, 46 28, 50 26 Z" className="fill-cyan-800/20" />
+            <path 
+              d="M14 26 C8 24, 8 36, 15 34 C18 33, 18 28, 14 26 Z" 
+              className={isSurface ? "fill-none stroke-cyan-700" : "fill-cyan-800/20"} 
+              strokeDasharray={isSurface ? "4 2" : "none"}
+            />
+            <path 
+              d="M50 26 C56 24, 56 36, 49 34 C46 33, 46 28, 50 26 Z" 
+              className={isSurface ? "fill-none stroke-cyan-700" : "fill-cyan-800/20"} 
+              strokeDasharray={isSurface ? "4 2" : "none"}
+            />
 
             {/* Mantle: base glow + hover intensifier */}
             <g>
               <path
                 d="M32 10 C22 10, 14 18, 14 29 C14 41, 23 50, 32 50 C41 50, 50 41, 50 29 C50 18, 42 10, 32 10 Z"
-                className="fill-cyan-900/20"
-                filter={`url(#${glowSoftId})`}
+                className={isSurface ? "fill-none stroke-cyan-700" : "fill-cyan-900/20"}
+                strokeDasharray={isSurface ? "4 2" : "none"}
+                filter={isSurface ? "none" : `url(#${glowSoftId})`}
               />
-              <path
-                d="M32 10 C22 10, 14 18, 14 29 C14 41, 23 50, 32 50 C41 50, 50 41, 50 29 C50 18, 42 10, 32 10 Z"
-                className="fill-cyan-400/20 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-                filter={`url(#${glowStrongId})`}
-              />
+              {!isSurface && (
+                <path
+                  d="M32 10 C22 10, 14 18, 14 29 C14 41, 23 50, 32 50 C41 50, 50 41, 50 29 C50 18, 42 10, 32 10 Z"
+                  className="fill-cyan-400/20 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                  filter={`url(#${glowStrongId})`}
+                />
+              )}
             </g>
 
             {/* Brain circle */}
-            <circle cx="32" cy="22" r="6.5" className="fill-cyan-200/15 stroke-cyan-200/25" strokeWidth="1" />
+            <circle 
+              cx="32" 
+              cy="22" 
+              r="6.5" 
+              className={isSurface ? "fill-none stroke-cyan-700" : "fill-cyan-200/15 stroke-cyan-200/25"} 
+              strokeWidth="1"
+              strokeDasharray={isSurface ? "4 2" : "none"}
+            />
 
             {/* Tentacles + webbing */}
-            <g className="fill-cyan-800/15 stroke-cyan-200/15" strokeWidth="1">
+            <g className={isSurface ? "fill-none stroke-cyan-700" : "fill-cyan-800/15 stroke-cyan-200/15"} strokeWidth="1" strokeDasharray={isSurface ? "4 2" : "none"}>
               <path d="M20 44 C18 52, 22 56, 25 54 C27 52, 25 48, 24 44 Z" />
               <path d="M26 46 C25 54, 29 57, 31 55 C33 53, 31 49, 30 46 Z" />
               <path d="M34 46 C33 54, 37 57, 39 55 C41 53, 39 49, 38 46 Z" />
               <path d="M40 44 C39 52, 43 56, 46 54 C48 52, 46 48, 44 44 Z" />
-              <path d="M20 44 C25 48, 39 48, 44 44" className="fill-cyan-800/10" />
+              {!isSurface && <path d="M20 44 C25 48, 39 48, 44 44" className="fill-cyan-800/10" />}
             </g>
 
             {/* Eyes: glowing white slits (no pupils) */}
             <g>
-              <rect x="20" y="27" width="12" height="3.2" rx="1.6" className="fill-white/80" />
-              <rect x="32" y="27" width="12" height="3.2" rx="1.6" className="fill-white/80" />
+              <rect x="20" y="27" width="12" height="3.2" rx="1.6" className={isSurface ? "fill-cyan-700/20" : "fill-white/80"} />
+              <rect x="32" y="27" width="12" height="3.2" rx="1.6" className={isSurface ? "fill-cyan-700/20" : "fill-white/80"} />
             </g>
           </g>
         )}

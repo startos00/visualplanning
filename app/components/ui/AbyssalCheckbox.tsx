@@ -7,9 +7,12 @@ export type AbyssalCheckboxProps = {
   onChange: (checked: boolean) => void;
   label?: string;
   className?: string;
+  theme?: "abyss" | "surface";
 };
 
-export function AbyssalCheckbox({ checked, onChange, label, className = "" }: AbyssalCheckboxProps) {
+export function AbyssalCheckbox({ checked, onChange, label, className = "", theme = "abyss" }: AbyssalCheckboxProps) {
+  const isSurface = theme === "surface";
+
   return (
     <label className={`flex cursor-pointer items-center gap-2 group ${className}`}>
       <div className="relative">
@@ -21,19 +24,29 @@ export function AbyssalCheckbox({ checked, onChange, label, className = "" }: Ab
         />
         <div className={`flex h-5 w-5 items-center justify-center rounded-lg border transition-all duration-200 ${
           checked 
-            ? "border-cyan-400/50 bg-cyan-500/20 shadow-[0_0_12px_rgba(34,211,238,0.3)]" 
-            : "border-cyan-300/20 bg-slate-950/40 group-hover:border-cyan-300/40"
+            ? isSurface
+              ? "border-slate-400 bg-slate-200"
+              : "border-cyan-400/50 bg-cyan-500/20 shadow-[0_0_12px_rgba(34,211,238,0.3)]" 
+            : isSurface
+              ? "border-slate-300 bg-slate-100 group-hover:border-slate-400"
+              : "border-cyan-300/20 bg-slate-950/40 group-hover:border-cyan-300/40"
         }`}>
-          <Check className={`h-3.5 w-3.5 text-cyan-50 transition-all duration-200 ${
+          <Check className={`h-3.5 w-3.5 transition-all duration-200 ${
+            isSurface ? "text-slate-700" : "text-cyan-50"
+          } ${
             checked ? "scale-100 opacity-100" : "scale-50 opacity-0"
           }`} />
         </div>
-        {/* Glow effect when checked */}
-        {checked && (
+        {/* Glow effect when checked (Abyss only) */}
+        {checked && !isSurface && (
           <div className="absolute inset-0 -z-10 animate-pulse rounded-lg bg-cyan-400/20 blur-md" />
         )}
       </div>
-      {label && <span className="text-sm text-cyan-100/80 group-hover:text-cyan-50 transition-colors">{label}</span>}
+      {label && <span className={`text-sm transition-colors ${
+        isSurface 
+          ? "text-slate-600 group-hover:text-slate-900" 
+          : "text-cyan-100/80 group-hover:text-cyan-50"
+      }`}>{label}</span>}
     </label>
   );
 }

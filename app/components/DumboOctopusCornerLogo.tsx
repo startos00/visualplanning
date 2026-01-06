@@ -20,6 +20,7 @@ export type DumboOctopusCornerLogoProps = {
   decorative?: boolean;
   idleOpacity?: number; // 0..1
   activeIntensity?: number; // 0..2 (soft cap)
+  theme?: "abyss" | "surface";
 };
 
 type CSSVars = React.CSSProperties & Record<`--${string}`, string | number>;
@@ -64,8 +65,10 @@ export function DumboOctopusCornerLogo(props: DumboOctopusCornerLogoProps) {
     decorative = false,
     idleOpacity = 0.25,
     activeIntensity = 1,
+    theme = "abyss",
   } = props;
 
+  const isSurface = theme === "surface";
   const isInteractive = Boolean(href || onClick);
   const Tag = (href ? "a" : isInteractive ? "button" : "div") as
     | "a"
@@ -122,7 +125,7 @@ export function DumboOctopusCornerLogo(props: DumboOctopusCornerLogoProps) {
         focusable="false"
       >
         {/* Simplified Dumbo silhouette: ear fins + bell mantle + webbed tentacles */}
-        <g fill="currentColor">
+        <g fill={isSurface ? "#facc15" : "currentColor"} stroke={isSurface ? "#0f172a" : "none"} strokeWidth={isSurface ? 2 : 0}>
           {/* Wing-like fins (bigger + more "flappy" like the reference photo) */}
           <path d="M18 22 C10 18, 6 24, 7.5 30 C9 36, 15 39, 20 36 C23 34, 23 26, 18 22 Z" />
           <path d="M46 22 C54 18, 58 24, 56.5 30 C55 36, 49 39, 44 36 C41 34, 41 26, 46 22 Z" />
@@ -159,7 +162,7 @@ export function DumboOctopusCornerLogo(props: DumboOctopusCornerLogoProps) {
           {/* Scalloped edge hint (kept subtle: improves “umbrella arms” read at 24–48px) */}
           <path
             d="M18 42 C21 41, 22.5 44.5, 25.5 44 C28 43.6, 29.2 46.6, 32 46.6 C34.8 46.6, 36 43.6, 38.5 44 C41.5 44.5, 43 41, 46 42 C45 46, 40.5 50, 32 50 C23.5 50, 19 46, 18 42 Z"
-            opacity="0.12"
+            opacity={isSurface ? "0.3" : "0.12"}
           />
         </g>
       </svg>
@@ -173,14 +176,14 @@ export function DumboOctopusCornerLogo(props: DumboOctopusCornerLogoProps) {
           border: 0;
           background: transparent;
           border-radius: 9999px;
-          color: rgba(248, 250, 252, 1);
-          opacity: var(--dcl-idle-opacity);
+          color: ${isSurface ? "#0f172a" : "rgba(248, 250, 252, 1)"};
+          opacity: ${isSurface ? "1" : "var(--dcl-idle-opacity)"};
           user-select: none;
           -webkit-tap-highlight-color: transparent;
           will-change: filter, opacity, transform;
 
           /* Idle state: “barely there”, with at most a subtle halo. */
-          filter: drop-shadow(0 0 3px rgba(34, 211, 238, 0.06));
+          filter: ${isSurface ? "none" : "drop-shadow(0 0 3px rgba(34, 211, 238, 0.06))"};
           transition:
             filter 180ms ease,
             opacity 180ms ease,
@@ -200,11 +203,12 @@ export function DumboOctopusCornerLogo(props: DumboOctopusCornerLogoProps) {
         .dcl:active,
         .dcl:focus-visible {
           opacity: var(--dcl-active-opacity);
-          filter:
+          filter: ${isSurface ? "none" : `
             drop-shadow(0 0 2px rgba(34, 211, 238, var(--dcl-glow-1)))
             drop-shadow(0 0 6px rgba(34, 211, 238, var(--dcl-glow-2)))
             drop-shadow(0 0 14px rgba(34, 211, 238, var(--dcl-glow-3)))
-            drop-shadow(0 0 26px rgba(34, 211, 238, var(--dcl-glow-4)));
+            drop-shadow(0 0 26px rgba(34, 211, 238, var(--dcl-glow-4)))
+          `};
         }
 
         /* Press feedback (esp. touch) */

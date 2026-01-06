@@ -16,6 +16,7 @@ type GlassNodeData = GrimpoNodeData & {
   // Ephemeral view context (NOT persisted):
   zoom?: number;
   mode?: EffectiveMode;
+  theme?: "abyss" | "surface";
   onUpdate?: (id: string, patch: Partial<GrimpoNodeData>) => void;
   onDelete?: (id: string) => void;
   onTaskDone?: (id: string) => void;
@@ -114,6 +115,7 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
 
   const zoom = data.zoom ?? 1;
   const mode = data.mode ?? "tactical";
+  const isSurface = data.theme === "surface";
 
   // Semantic zoom: zoomed out means "title-only" (big picture).
   const titleOnly = mode === "strategy" || zoom < 1;
@@ -124,7 +126,25 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
 
   // Deadline and color logic
   const overdue = isOverdue(data.deadline);
-  const selectedColor = data.color || DEFAULT_COLOR;
+  const selectedColor = data.color || (isSurface ? "#94a3b8" : DEFAULT_COLOR);
+  
+  // Container styling
+  const containerClasses = isSurface
+    ? [
+        "bg-white/95 shadow-md border-slate-200",
+        selected ? "ring-2 ring-slate-400 ring-offset-2" : "",
+      ].join(" ")
+    : [
+        "bg-slate-900/50 backdrop-blur-md",
+        !selected && !done && !swallowing ? "octo-breath" : "",
+      ].join(" ");
+
+  const textPrimary = isSurface ? "text-slate-900" : "text-cyan-50";
+  const textSecondary = isSurface ? "text-slate-500" : "text-cyan-200/90";
+  const placeholderColor = isSurface ? "placeholder:text-slate-400" : "placeholder:text-cyan-200/40";
+  const inputBg = isSurface ? "bg-slate-100/50" : "bg-slate-950/30";
+  const inputBorder = isSurface ? "border-slate-200" : "border-cyan-300/20";
+
   // Overdue takes priority: use red border, otherwise use selected color
   const borderColor = overdue ? "#ef4444" : selectedColor;
   const glowColor = overdue ? "#ef4444" : selectedColor;
@@ -338,10 +358,20 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
   }
 
   // Build dynamic border and shadow styles
-  const borderRgba = hexToRgba(borderColor, 0.3);
+  const borderRgba = hexToRgba(borderColor, isSurface ? 0.8 : 0.3);
   const glowRgba = hexToRgba(glowColor, glowIntensity);
-  const borderStyle = { borderColor: borderRgba };
-  const shadowStyle = { boxShadow: `0 0 ${glowSpread} ${glowRgba}` };
+  const borderStyle = { 
+    borderColor: isSurface && data.color ? borderColor : borderRgba,
+    borderWidth: isSurface && data.color ? '2px' : '1px'
+  };
+  
+  const surfaceBgStyle = isSurface && data.color 
+    ? { backgroundColor: hexToRgba(selectedColor, 0.05) } 
+    : {};
+
+  const shadowStyle = isSurface 
+    ? { boxShadow: selected ? `0 0 20px rgba(0,0,0,0.1)` : '0 4px 6px -1px rgb(0 0 0 / 0.1)' }
+    : { boxShadow: `0 0 ${glowSpread} ${glowRgba}` };
 
   const handleDoubleClick = () => {
     if (type === "resource" && data.pdfUrl && data.pdfUrl.trim()) {
@@ -354,6 +384,10 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
       data.onExtractTask(text, id);
     }
   };
+
+  const handleClass = isSurface
+    ? "!h-3 !w-3 !border-0 !bg-slate-400"
+    : "!h-3 !w-3 !border-0 !bg-cyan-300/70 !shadow-[0_0_10px_rgba(34,211,238,0.55)]";
 
   return (
     <>
@@ -368,35 +402,52 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
       )}
       <div
         className={[
-          "relative w-[320px] rounded-3xl border bg-slate-900/50 backdrop-blur-md",
-          "transition-all duration-200",
+          "relative w-[320px] rounded-3xl border transition-all duration-300 overflow-hidden",
+          containerClasses,
           done ? "opacity-60" : "",
-          !selected && !done && !swallowing ? "octo-breath" : "",
           swallowing ? "scale-0 opacity-0" : "",
           type === "resource" && data.pdfUrl ? "cursor-pointer" : "",
         ].join(" ")}
-        style={{ ...borderStyle, ...shadowStyle }}
+        style={{ ...borderStyle, ...shadowStyle, ...surfaceBgStyle }}
         onDoubleClick={handleDoubleClick}
       >
-        {/* sheen */}
-        <div className="pointer-events-none absolute inset-0 rounded-3xl bg-gradient-to-b from-white/10 to-transparent" />
+        {/* top accent bar (Surface Mode only) */}
+        {isSurface && data.color && (
+          <div 
+            className="absolute top-0 left-0 right-0 h-1.5" 
+            style={{ backgroundColor: selectedColor }}
+          />
+        )}
+
+        {/* sheen (Abyss only) */}
+        {!isSurface && (
+          <div className="pointer-events-none absolute inset-0 rounded-3xl bg-gradient-to-b from-white/10 to-transparent" />
+        )}
 
         <Handle
           type="target"
           position={Position.Left}
-          className="!h-3 !w-3 !border-0 !bg-cyan-300/70 !shadow-[0_0_10px_rgba(34,211,238,0.55)]"
+          className={handleClass}
         />
         <Handle
           type="source"
           position={Position.Right}
-          className="!h-3 !w-3 !border-0 !bg-cyan-300/70 !shadow-[0_0_10px_rgba(34,211,238,0.55)]"
+          className={handleClass}
         />
 
         <div className="relative p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-xs tracking-widest text-cyan-200/90">
-              <badge.Icon className="h-4 w-4 text-cyan-200/90" />
-              <span className="rounded-full border border-cyan-300/20 bg-slate-950/40 px-2 py-1">
+            <div className={`flex items-center gap-2 text-xs tracking-widest ${isSurface && data.color ? '' : textSecondary}`}>
+              <badge.Icon className={`h-4 w-4 ${isSurface && data.color ? '' : textSecondary}`} style={isSurface && data.color ? { color: selectedColor } : {}} />
+              <span 
+                className={`rounded-full border px-2 py-1 transition-colors ${inputBorder} ${inputBg}`}
+                style={isSurface && data.color ? { 
+                  backgroundColor: hexToRgba(selectedColor, 0.15),
+                  borderColor: hexToRgba(selectedColor, 0.3),
+                  color: selectedColor,
+                  fontWeight: 'bold'
+                } : {}}
+              >
                 {badge.label}
               </span>
             </div>
@@ -409,14 +460,18 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                     const value = e.target.value || undefined;
                     data.onUpdate?.(id, { deadline: value });
                   }}
-                  className="h-7 rounded-full border border-cyan-300/15 bg-slate-950/30 px-3 text-[10px] text-cyan-50/80 outline-none transition-all hover:bg-slate-950/50 hover:border-cyan-300/30 focus:border-cyan-300/50 focus:ring-1 focus:ring-cyan-300/20"
+                  className={`h-7 rounded-full border ${inputBorder} ${inputBg} px-3 text-[10px] ${isSurface ? 'text-slate-700' : 'text-cyan-50/80'} outline-none transition-all hover:opacity-80 focus:ring-1 focus:ring-cyan-300/20`}
                   title="Set deadline"
                 />
               </div>
               {type === "resource" && !titleOnly && data.link ? (
                 <button
                   onClick={() => window.open(data.link, "_blank", "noopener,noreferrer")}
-                  className="inline-flex items-center gap-1 rounded-full border border-rose-300/20 bg-rose-500/10 px-2 py-1 text-xs text-rose-200 shadow-[0_0_14px_rgba(244,63,94,0.18)] hover:bg-rose-500/20"
+                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs transition-colors ${
+                    isSurface 
+                      ? "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200" 
+                      : "border-rose-300/20 bg-rose-500/10 text-rose-200 shadow-[0_0_14px_rgba(244,63,94,0.18)] hover:bg-rose-500/20"
+                  }`}
                   title="Open link"
                 >
                   <ExternalLink className="h-3 w-3" />
@@ -431,9 +486,11 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
             onChange={(e) => data.onUpdate?.(id, { title: e.target.value })}
             placeholder="Title…"
             className={[
-              "w-full bg-transparent font-semibold outline-none",
-              "text-cyan-50 placeholder:text-cyan-200/40",
+              "w-full bg-transparent font-semibold outline-none transition-colors",
+              textPrimary,
+              placeholderColor,
               titleOnly ? "text-2xl" : "text-lg",
+              isSurface ? "font-bold" : "font-semibold",
             ].join(" ")}
           />
 
@@ -445,14 +502,14 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                     value={data.link ?? ""}
                     onChange={(e) => data.onUpdate?.(id, { link: e.target.value })}
                     placeholder="Link (URL)…"
-                    className="w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 text-sm text-cyan-50 outline-none placeholder:text-cyan-200/30 focus:border-cyan-200/40"
+                    className={`w-full rounded-2xl border ${inputBorder} ${inputBg} px-3 py-2 text-sm ${textPrimary} outline-none ${placeholderColor} focus:border-cyan-200/40`}
                   />
                   <div className="relative">
                     <input
                       value={data.pdfUrl ?? ""}
                       onChange={(e) => data.onUpdate?.(id, { pdfUrl: e.target.value })}
                       placeholder="PDF URL…"
-                      className="w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 pr-8 text-sm text-cyan-50 outline-none placeholder:text-cyan-200/30 focus:border-cyan-200/40"
+                      className={`w-full rounded-2xl border ${inputBorder} ${inputBg} px-3 py-2 pr-8 text-sm ${textPrimary} outline-none ${placeholderColor} focus:border-cyan-200/40`}
                     />
                     {data.pdfUrl ? (
                       <button
@@ -461,7 +518,9 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                           data.onUpdate?.(id, { pdfUrl: "" });
                           setPersistedPdfName("");
                         }}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-cyan-200/60 hover:bg-slate-800/50 hover:text-cyan-200"
+                        className={`absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 transition-colors ${
+                          isSurface ? "text-slate-400 hover:text-slate-600" : "text-cyan-200/60 hover:text-cyan-200"
+                        }`}
                         title="Clear PDF URL"
                       >
                         <X className="h-4 w-4" />
@@ -473,13 +532,15 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                       value={data.videoUrl ?? ""}
                       onChange={(e) => data.onUpdate?.(id, { videoUrl: e.target.value })}
                       placeholder="YouTube URL…"
-                      className="w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 pr-8 text-sm text-cyan-50 outline-none placeholder:text-cyan-200/30 focus:border-cyan-200/40"
+                      className={`w-full rounded-2xl border ${inputBorder} ${inputBg} px-3 py-2 pr-8 text-sm ${textPrimary} outline-none ${placeholderColor} focus:border-cyan-200/40`}
                     />
                     {data.videoUrl ? (
                       <button
                         type="button"
                         onClick={() => data.onUpdate?.(id, { videoUrl: "" })}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-cyan-200/60 hover:bg-slate-800/50 hover:text-cyan-200"
+                        className={`absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 transition-colors ${
+                          isSurface ? "text-slate-400 hover:text-slate-600" : "text-cyan-200/60 hover:text-cyan-200"
+                        }`}
                         title="Clear video URL"
                       >
                         <X className="h-4 w-4" />
@@ -506,7 +567,11 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="rounded-full border border-rose-300/20 bg-rose-500/10 px-3 py-1 text-xs text-rose-200 shadow-[0_0_14px_rgba(244,63,94,0.18)] hover:bg-rose-500/20"
+                      className={`rounded-full border px-3 py-1 text-xs transition-all ${
+                        isSurface
+                          ? "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200"
+                          : "border-rose-300/20 bg-rose-500/10 text-rose-200 shadow-[0_0_14px_rgba(244,63,94,0.18)] hover:bg-rose-500/20"
+                      }`}
                       title="Upload a PDF for session-only preview"
                     >
                       Upload PDF (preview)
@@ -522,7 +587,7 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                           setLocalPdfName("");
                           if (fileInputRef.current) fileInputRef.current.value = "";
                         }}
-                        className="rounded-full border border-cyan-300/20 bg-slate-950/30 px-3 py-1 text-xs text-cyan-100/80 hover:bg-slate-950/45"
+                        className={`rounded-full border ${inputBorder} ${inputBg} px-3 py-1 text-xs ${isSurface ? 'text-slate-600' : 'text-cyan-100/80'} hover:opacity-80`}
                       >
                         Clear
                       </button>
@@ -530,7 +595,7 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                   </div>
 
                   {localPdfName ? (
-                    <div className="text-xs text-cyan-100/60">
+                    <div className={`text-xs ${isSurface ? 'text-slate-500' : 'text-cyan-100/60'}`}>
                       Preview-only: {localPdfName}
                     </div>
                   ) : null}
@@ -551,14 +616,13 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                       type="button"
                       onClick={() => persistFileInputRef.current?.click()}
                       disabled={pdfUploading || ocrRunning || summarising}
-                      className={[
-                        "rounded-full border border-cyan-300/20 bg-slate-950/30 px-3 py-1 text-xs text-cyan-100/80 hover:bg-slate-950/45",
-                        pdfUploading || ocrRunning || summarising ? "opacity-50" : "",
-                      ].join(" ")}
+                      className={`rounded-full border ${inputBorder} ${inputBg} px-3 py-1 text-xs transition-all ${
+                        isSurface ? 'text-slate-600 hover:bg-slate-200' : 'text-cyan-100/80 hover:bg-slate-950/45'
+                      } ${pdfUploading || ocrRunning || summarising ? "opacity-50" : ""}`}
                     >
                       {pdfUploading ? "Uploading…" : "Upload PDF (save)"}
                     </button>
-                    {aiStatus ? <div className="text-xs text-cyan-100/60">{aiStatus}</div> : null}
+                    {aiStatus ? <div className={`text-xs ${isSurface ? 'text-slate-500' : 'text-cyan-100/60'}`}>{aiStatus}</div> : null}
                   </div>
 
                   <div className="flex items-center justify-between gap-2">
@@ -566,23 +630,24 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                       type="button"
                       onClick={() => summarisePersistedPdf()}
                       disabled={pdfUploading || ocrRunning || summarising}
-                      className={[
-                        "rounded-full border border-rose-300/20 bg-rose-500/10 px-3 py-1 text-xs text-rose-200 shadow-[0_0_14px_rgba(244,63,94,0.18)] hover:bg-rose-500/20",
-                        pdfUploading || ocrRunning || summarising ? "opacity-50" : "",
-                      ].join(" ")}
+                      className={`rounded-full border px-3 py-1 text-xs transition-all ${
+                        isSurface
+                          ? "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200"
+                          : "border-rose-300/20 bg-rose-500/10 text-rose-200 shadow-[0_0_14px_rgba(244,63,94,0.18)] hover:bg-rose-500/20"
+                      } ${pdfUploading || ocrRunning || summarising ? "opacity-50" : ""}`}
                     >
                       {summarising ? "Summarising…" : "Summarise"}
                     </button>
                     {(data.pdfUrl ?? "").trim() ? (
-                      <div className="text-xs text-cyan-100/60">
+                      <div className={`text-xs ${isSurface ? 'text-slate-500' : 'text-cyan-100/60'}`}>
                         PDF: {persistedPdfName || "ready"}
                       </div>
                     ) : (
-                      <div className="text-xs text-cyan-100/60">No saved PDF yet</div>
+                      <div className={`text-xs ${isSurface ? 'text-slate-500' : 'text-cyan-100/60'}`}>No saved PDF yet</div>
                     )}
                   </div>
 
-                  {aiError ? <div className="text-xs text-rose-200/90">{aiError}</div> : null}
+                  {aiError ? <div className={`text-xs ${isSurface ? 'text-rose-600' : 'text-rose-200/90'}`}>{aiError}</div> : null}
 
                   {(() => {
                     const pdfSrc = localPdfPreviewUrl || (data.pdfUrl ?? "").trim();
@@ -591,14 +656,18 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                     return (
                       <div className="space-y-2">
                         {pdfSrc ? (
-                          <div className="rounded-2xl border border-cyan-300/20 bg-slate-950/20 p-2">
+                          <div className={`rounded-2xl border ${inputBorder} ${inputBg} p-2`}>
                             <div className="mb-2 flex items-center justify-between gap-2">
-                              <div className="text-xs tracking-widest text-cyan-100/70">PDF</div>
+                              <div className={`text-xs tracking-widest ${isSurface ? 'text-slate-500' : 'text-cyan-100/70'}`}>PDF</div>
                               <div className="flex items-center gap-2">
                                 <button
                                   type="button"
                                   onClick={() => data.onBathysphereMode?.(id, true)}
-                                  className="inline-flex items-center gap-1 rounded-full border border-cyan-300/20 bg-cyan-500/10 px-2 py-1 text-xs text-cyan-200 hover:bg-cyan-500/20"
+                                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs transition-colors ${
+                                    isSurface
+                                      ? "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200"
+                                      : "border-cyan-300/20 bg-cyan-500/10 text-cyan-200 hover:bg-cyan-500/20"
+                                  }`}
                                 >
                                   <Maximize2 className="h-3 w-3" />
                                   Maximize
@@ -613,7 +682,11 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                                       data.onUpdate?.(id, { pdfUrl: "" });
                                     }
                                   }}
-                                  className="inline-flex items-center gap-1 rounded-full border border-rose-300/20 bg-rose-500/10 px-2 py-1 text-xs text-rose-200 hover:bg-rose-500/20"
+                                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs transition-colors ${
+                                    isSurface
+                                      ? "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200"
+                                      : "border-rose-300/20 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20"
+                                  }`}
                                 >
                                   <X className="h-3 w-3" />
                                   Delete
@@ -630,13 +703,17 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                         ) : null}
 
                         {(data.videoUrl ?? "").trim() ? (
-                          <div className="rounded-2xl border border-cyan-300/20 bg-slate-950/20 p-2">
+                          <div className={`rounded-2xl border ${inputBorder} ${inputBg} p-2`}>
                             <div className="mb-2 flex items-center justify-between gap-2">
-                              <div className="text-xs tracking-widest text-cyan-100/70">VIDEO</div>
+                              <div className={`text-xs tracking-widest ${isSurface ? 'text-slate-500' : 'text-cyan-100/70'}`}>VIDEO</div>
                               <button
                                 type="button"
                                 onClick={() => data.onUpdate?.(id, { videoUrl: "" })}
-                                className="inline-flex items-center gap-1 rounded-full border border-rose-300/20 bg-rose-500/10 px-2 py-1 text-xs text-rose-200 hover:bg-rose-500/20"
+                                className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs transition-colors ${
+                                  isSurface
+                                    ? "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200"
+                                    : "border-rose-300/20 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20"
+                                }`}
                               >
                                 <X className="h-3 w-3" />
                                 Delete
@@ -646,7 +723,7 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                               <iframe
                                 title="YouTube preview"
                                 src={ytEmbed}
-                                className="h-[200px] w-full rounded-xl border border-cyan-300/10 bg-black/20"
+                                className={`h-[200px] w-full rounded-xl border ${isSurface ? 'border-slate-200 bg-slate-100' : 'border-cyan-300/10 bg-black/20'}`}
                                 loading="lazy"
                                 allowFullScreen
                               />
@@ -670,11 +747,11 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                       }
                     }}
                     placeholder={type === "resource" ? "Summary / notes…" : "Next step…"}
-                    className="min-h-[88px] min-w-[200px] w-full resize rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 text-sm text-cyan-50 outline-none placeholder:text-cyan-200/30 focus:border-cyan-200/40"
+                    className={`min-h-[88px] min-w-[200px] w-full resize rounded-2xl border ${inputBorder} ${inputBg} px-3 py-2 text-sm ${textPrimary} outline-none ${placeholderColor} focus:border-cyan-200/40`}
                   />
                 ) : type === "resource" && data.notes && showMarkdownView && !notesEditMode ? (
-                  <div className="group relative min-h-[88px] min-w-[200px] w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 overflow-auto resize">
-                    <div className="markdown-content text-sm text-cyan-100">
+                  <div className={`group relative min-h-[88px] min-w-[200px] w-full rounded-2xl border ${inputBorder} ${inputBg} px-3 py-2 overflow-auto resize`}>
+                    <div className={`markdown-content text-sm ${isSurface ? 'text-slate-700' : 'text-cyan-100'}`}>
                       <ReactMarkdown>{data.notes}</ReactMarkdown>
                     </div>
                     <div className="absolute right-2 top-2 flex gap-1">
@@ -683,7 +760,9 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                           e.stopPropagation();
                           setShowMarkdownView(false);
                         }}
-                        className="rounded bg-slate-800/80 px-2 py-1 text-xs text-cyan-200 opacity-70 transition-opacity hover:bg-slate-700/80 hover:opacity-100"
+                        className={`rounded px-2 py-1 text-xs transition-all ${
+                          isSurface ? "bg-slate-200 text-slate-700 hover:bg-slate-300" : "bg-slate-800/80 text-cyan-200 opacity-70 hover:bg-slate-700/80 hover:opacity-100"
+                        }`}
                         title="View raw text"
                       >
                         Raw
@@ -693,7 +772,9 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                           e.stopPropagation();
                           setNotesEditMode(true);
                         }}
-                        className="rounded bg-slate-800/80 px-2 py-1 text-xs text-cyan-200 opacity-70 transition-opacity hover:bg-slate-700/80 hover:opacity-100"
+                        className={`rounded px-2 py-1 text-xs transition-all ${
+                          isSurface ? "bg-slate-200 text-slate-700 hover:bg-slate-300" : "bg-slate-800/80 text-cyan-200 opacity-70 hover:bg-slate-700/80 hover:opacity-100"
+                        }`}
                         title="Edit"
                       >
                         Edit
@@ -701,8 +782,8 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                     </div>
                   </div>
                 ) : type === "resource" && data.notes && !showMarkdownView && !notesEditMode ? (
-                  <div className="group relative min-h-[88px] min-w-[200px] w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 overflow-auto resize">
-                    <div className="text-sm text-cyan-100 whitespace-pre-wrap">
+                  <div className={`group relative min-h-[88px] min-w-[200px] w-full rounded-2xl border ${inputBorder} ${inputBg} px-3 py-2 overflow-auto resize`}>
+                    <div className={`text-sm ${isSurface ? 'text-slate-700' : 'text-cyan-100'} whitespace-pre-wrap`}>
                       {data.notes}
                     </div>
                     <div className="absolute right-2 top-2 flex gap-1">
@@ -711,7 +792,9 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                           e.stopPropagation();
                           setShowMarkdownView(true);
                         }}
-                        className="rounded bg-slate-800/80 px-2 py-1 text-xs text-cyan-200 opacity-70 transition-opacity hover:bg-slate-700/80 hover:opacity-100"
+                        className={`rounded px-2 py-1 text-xs transition-all ${
+                          isSurface ? "bg-slate-200 text-slate-700 hover:bg-slate-300" : "bg-slate-800/80 text-cyan-200 opacity-70 hover:bg-slate-700/80 hover:opacity-100"
+                        }`}
                         title="View markdown"
                       >
                         Markdown
@@ -721,7 +804,9 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                           e.stopPropagation();
                           setNotesEditMode(true);
                         }}
-                        className="rounded bg-slate-800/80 px-2 py-1 text-xs text-cyan-200 opacity-70 transition-opacity hover:bg-slate-700/80 hover:opacity-100"
+                        className={`rounded px-2 py-1 text-xs transition-all ${
+                          isSurface ? "bg-slate-200 text-slate-700 hover:bg-slate-300" : "bg-slate-800/80 text-cyan-200 opacity-70 hover:bg-slate-700/80 hover:opacity-100"
+                        }`}
                         title="Edit"
                       >
                         Edit
@@ -730,10 +815,10 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                   </div>
                 ) : (
                   <div 
-                    className="group relative min-h-[88px] min-w-[200px] w-full rounded-2xl border border-cyan-300/20 bg-slate-950/30 px-3 py-2 overflow-auto resize cursor-text"
+                    className={`group relative min-h-[88px] min-w-[200px] w-full rounded-2xl border ${inputBorder} ${inputBg} px-3 py-2 overflow-auto resize cursor-text`}
                     onClick={() => setNotesEditMode(true)}
                   >
-                    <div className="markdown-content text-sm text-cyan-100 whitespace-pre-wrap">
+                    <div className={`markdown-content text-sm ${isSurface ? 'text-slate-700' : 'text-cyan-100'} whitespace-pre-wrap`}>
                       {data.notes}
                     </div>
                     <button
@@ -741,7 +826,9 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                         e.stopPropagation();
                         setNotesEditMode(true);
                       }}
-                      className="absolute right-2 top-2 rounded bg-slate-800/80 px-2 py-1 text-xs text-cyan-200 opacity-70 transition-opacity hover:bg-slate-700/80 hover:opacity-100"
+                      className={`absolute right-2 top-2 rounded px-2 py-1 text-xs transition-all ${
+                        isSurface ? "bg-slate-200 text-slate-700 hover:bg-slate-300" : "bg-slate-800/80 text-cyan-200 opacity-70 hover:bg-slate-700/80 hover:opacity-100"
+                      }`}
                     >
                       Edit
                     </button>
@@ -754,6 +841,7 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                   <AbyssalCheckbox
                     label="Done"
                     checked={data.status === "done"}
+                    theme={data.theme}
                     onChange={(checked) => {
                       data.onUpdate?.(id, { status: checked ? "done" : "todo" });
                       if (checked) data.onTaskDone?.(id);
@@ -764,7 +852,11 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                       setSwallowing(true);
                       setTimeout(() => data.onDelete?.(id), 220);
                     }}
-                    className="rounded-full border border-rose-300/20 bg-rose-500/10 px-3 py-1 text-xs text-rose-200 hover:bg-rose-500/20"
+                    className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                      isSurface 
+                        ? "border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200" 
+                        : "border-rose-300/20 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20"
+                    }`}
                   >
                     Swallow
                   </button>
@@ -773,7 +865,7 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
 
               <div className="flex items-center justify-center gap-2 pt-2">
                 {Object.values(COLORS).map((color) => {
-                  const isSelected = (data.color || DEFAULT_COLOR) === color.hex;
+                  const isSelected = (data.color || (isSurface ? "#94a3b8" : DEFAULT_COLOR)) === color.hex;
                   return (
                     <button
                       key={color.hex}
@@ -784,7 +876,9 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                       }}
                       className={[
                         "h-5 w-5 rounded-full border-2 transition-all duration-200",
-                        isSelected ? "scale-125 border-white shadow-[0_0_8px_rgba(255,255,255,0.5)]" : "border-transparent hover:scale-110 hover:border-white/50",
+                        isSelected 
+                          ? `scale-125 ${isSurface ? 'border-slate-500' : 'border-white'} shadow-sm` 
+                          : "border-transparent hover:scale-110 hover:border-white/50",
                       ].join(" ")}
                       style={{ backgroundColor: color.hex }}
                     />

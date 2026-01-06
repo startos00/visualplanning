@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, use } from "react";
 import ReactFlow, {
   Background,
+  BackgroundVariant,
   Controls,
   addEdge,
   useEdgesState,
@@ -49,6 +50,7 @@ function HomeContent() {
 
   const [viewport, setViewport] = useState<Viewport>({ x: 0, y: 0, zoom: 1 });
   const [modeSetting, setModeSetting] = useState<ModeSetting>("auto");
+  const [theme, setTheme] = useState<"abyss" | "surface">("abyss");
   const [addOpen, setAddOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [octopusInstances, setOctopusInstances] = useState<string[]>([]);
@@ -72,8 +74,14 @@ function HomeContent() {
       ? (viewport.zoom < 1 ? "strategy" : "tactical")
       : modeSetting;
 
-  // Load persisted graph on first mount.
+  // Load persisted theme and graph on first mount.
   useEffect(() => {
+    const savedTheme = localStorage.getItem("grimpo-theme") as "abyss" | "surface" | null;
+    if (savedTheme) {
+      setTheme(savedTheme);
+      document.documentElement.setAttribute("data-theme", savedTheme === "surface" ? "light" : "dark");
+    }
+
     async function load() {
       const saved = await loadState();
       if (saved && (saved.nodes !== null || saved.edges !== null)) {
@@ -152,6 +160,12 @@ function HomeContent() {
       }
     };
   }, [nodes, edges, handleAutoSave]);
+
+  // Update data-theme when theme changes
+  useEffect(() => {
+    localStorage.setItem("grimpo-theme", theme);
+    document.documentElement.setAttribute("data-theme", theme === "surface" ? "light" : "dark");
+  }, [theme]);
 
   const onMove = useCallback((_evt: unknown, vp: Viewport) => {
     setViewport(vp);
@@ -343,6 +357,7 @@ function HomeContent() {
           ...n.data,
           zoom: viewport.zoom,
           mode: effectiveMode,
+          theme,
           onUpdate: onUpdateNode,
           onDelete: onDeleteNode,
           onTaskDone: onTaskDone,
@@ -357,13 +372,13 @@ function HomeContent() {
 
   const defaultEdgeOptions: DefaultEdgeOptions = useMemo(
     () => ({
-      animated: true,
+      animated: theme === "abyss",
       style: {
-        stroke: "rgba(34,211,238,0.55)",
-        strokeWidth: 2,
+        stroke: theme === "abyss" ? "rgba(34,211,238,0.55)" : "#94a3b8",
+        strokeWidth: theme === "abyss" ? 2 : 1.5,
       },
     }),
-    [],
+    [theme],
   );
 
   const addNode = useCallback(
@@ -410,12 +425,36 @@ function HomeContent() {
 
   const isBathysphereActive = bathysphereNodeId !== null;
 
+  const onScatter = useCallback(() => {
+    const selected = nodes.filter((n) => n.selected);
+    if (selected.length < 2) return;
+
+    setNodes((nds) =>
+      nds.map((n) => {
+        if (n.selected) {
+          return {
+            ...n,
+            position: {
+              x: n.position.x + (Math.random() - 0.5) * 50,
+              y: n.position.y + (Math.random() - 0.5) * 50,
+            },
+          };
+        }
+        return n;
+      }),
+    );
+  }, [nodes, setNodes]);
+
   return (
     <div
       ref={wrapperRef}
-      className="relative h-screen w-screen bg-gradient-to-b from-slate-950 via-slate-950 to-black"
+      className={`relative h-screen w-screen transition-colors duration-500 ${
+        theme === "abyss"
+          ? "bg-gradient-to-b from-slate-950 via-slate-950 to-black"
+          : "bg-slate-50 text-slate-900"
+      }`}
     >
-      {!isBathysphereActive && <DumboOctopusCornerLogo corner="top-left" inset={16} size={46} decorative />}
+      {!isBathysphereActive && <DumboOctopusCornerLogo corner="top-left" inset={16} size={46} decorative theme={theme} />}
 
       {isSurfacing && <DecompressionOverlay />}
 
@@ -523,7 +562,11 @@ function HomeContent() {
             proOptions={{ hideAttribution: true }}
             multiSelectionKeyCode="Shift"
           >
-            <Background gap={32} size={1} color="rgba(255,255,255,0.04)" />
+            <Background 
+              gap={32} 
+              variant={theme === "surface" ? BackgroundVariant.Lines : BackgroundVariant.Dots}
+              color={theme === "abyss" ? "rgba(255,255,255,0.04)" : "#e2e8f0"} 
+            />
             <Controls position="bottom-left" style={{ bottom: 140 }} />
           </ReactFlow>
 
@@ -531,11 +574,46 @@ function HomeContent() {
         </>
       )}
 
-      {/* Mode toggle overlay */}
+      {/* Mode and Theme toggle overlay */}
       {!isBathysphereActive && !sonarArrayOpen && (
       <div className="pointer-events-none absolute right-4 top-4 z-50 flex flex-col items-end gap-2">
-        <div className="pointer-events-auto flex items-center gap-2">
-          <div className="flex items-center rounded-full border border-cyan-300/20 bg-slate-950/40 p-1 backdrop-blur-md shadow-[0_0_18px_rgba(34,211,238,0.18)]">
+        <div className="pointer-events-auto flex items-center gap-3">
+          {/* Theme Toggle */}
+          <div className={`flex items-center rounded-full border p-1 backdrop-blur-md transition-all duration-300 ${
+            theme === 'surface' 
+              ? 'border-slate-300 bg-white/80 shadow-md' 
+              : 'border-cyan-300/20 bg-slate-950/40 shadow-[0_0_18px_rgba(34,211,238,0.18)]'
+          }`}>
+            {(["abyss", "surface"] as const).map((t) => {
+              const active = theme === t;
+              return (
+                <button
+                  key={t}
+                  onClick={() => setTheme(t)}
+                  className={[
+                    "rounded-full px-3 py-1 text-xs tracking-wide transition-all duration-300",
+                    active
+                      ? theme === 'surface'
+                        ? "bg-slate-900 text-white shadow-sm"
+                        : "bg-cyan-400/20 text-cyan-50 shadow-[0_0_14px_rgba(34,211,238,0.25)]"
+                      : theme === 'surface'
+                        ? "text-slate-500 hover:text-slate-900"
+                        : "text-cyan-100/70 hover:text-cyan-50",
+                  ].join(" ")}
+                  title={`Theme: ${t}`}
+                >
+                  {t.toUpperCase()}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Mode Toggle */}
+          <div className={`flex items-center rounded-full border p-1 backdrop-blur-md transition-all duration-300 ${
+            theme === 'surface' 
+              ? 'border-slate-300 bg-white/80 shadow-md' 
+              : 'border-cyan-300/20 bg-slate-950/40 shadow-[0_0_18px_rgba(34,211,238,0.18)]'
+          }`}>
             {(["auto", "strategy", "tactical"] as const).map((m) => {
               const active = modeSetting === m;
               return (
@@ -543,10 +621,14 @@ function HomeContent() {
                   key={m}
                   onClick={() => setModeSetting(m)}
                   className={[
-                    "rounded-full px-3 py-1 text-xs tracking-wide transition-colors",
+                    "rounded-full px-3 py-1 text-xs tracking-wide transition-all duration-300",
                     active
-                      ? "bg-cyan-400/20 text-cyan-50 shadow-[0_0_14px_rgba(34,211,238,0.25)]"
-                      : "text-cyan-100/70 hover:text-cyan-50",
+                      ? theme === 'surface'
+                        ? "bg-slate-900 text-white shadow-sm"
+                        : "bg-cyan-400/20 text-cyan-50 shadow-[0_0_14px_rgba(34,211,238,0.25)]"
+                      : theme === 'surface'
+                        ? "text-slate-500 hover:text-slate-900"
+                        : "text-cyan-100/70 hover:text-cyan-50",
                   ].join(" ")}
                   title={`Mode: ${m}`}
                 >
@@ -558,13 +640,19 @@ function HomeContent() {
 
           <button
             onClick={() => setAbyssalOpen(true)}
-            className="rounded-full border border-emerald-300/15 bg-emerald-500/10 px-3 py-1 text-xs tracking-wide text-emerald-50 shadow-[0_0_18px_rgba(16,185,129,0.18)] backdrop-blur-md hover:bg-emerald-500/15"
+            className={`rounded-full border px-3 py-1 text-xs tracking-wide backdrop-blur-md transition-all duration-300 ${
+              theme === 'surface'
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700 shadow-sm hover:bg-emerald-100"
+                : "border-emerald-300/15 bg-emerald-500/10 text-emerald-50 shadow-[0_0_18px_rgba(16,185,129,0.18)] hover:bg-emerald-500/15"
+            }`}
             title="Open Abyssal Garden"
           >
             GARDEN
           </button>
         </div>
-        <div className="pointer-events-none text-xs text-cyan-100/60">
+        <div className={`pointer-events-none text-xs transition-colors duration-300 ${
+          theme === 'surface' ? 'text-slate-500' : 'text-cyan-100/60'
+        }`}>
           Zoom: {viewport.zoom.toFixed(2)} • Showing: {effectiveMode.toUpperCase()}
         </div>
       </div>
@@ -575,21 +663,31 @@ function HomeContent() {
       <div className="pointer-events-none absolute bottom-5 right-5 z-50">
         <div className="pointer-events-auto relative">
           {addOpen ? (
-            <div className="mb-3 flex flex-col gap-2 rounded-3xl border border-rose-300/20 bg-slate-950/50 p-2 backdrop-blur-md shadow-[0_0_24px_rgba(244,63,94,0.22)]">
+            <div className={`mb-3 flex flex-col gap-2 rounded-3xl border p-2 backdrop-blur-md transition-all duration-300 ${
+              theme === 'surface'
+                ? 'border-slate-300 bg-white/90 shadow-xl'
+                : 'border-rose-300/20 bg-slate-950/50 shadow-[0_0_24px_rgba(244,63,94,0.22)]'
+            }`}>
               <button
-                className="rounded-2xl px-4 py-2 text-left text-sm text-rose-100 hover:bg-white/5"
+                className={`rounded-2xl px-4 py-2 text-left text-sm transition-colors ${
+                  theme === 'surface' ? 'text-slate-700 hover:bg-slate-100' : 'text-rose-100 hover:bg-white/5'
+                }`}
                 onClick={() => addNode("strategy")}
               >
                 + Strategy node
               </button>
               <button
-                className="rounded-2xl px-4 py-2 text-left text-sm text-rose-100 hover:bg-white/5"
+                className={`rounded-2xl px-4 py-2 text-left text-sm transition-colors ${
+                  theme === 'surface' ? 'text-slate-700 hover:bg-slate-100' : 'text-rose-100 hover:bg-white/5'
+                }`}
                 onClick={() => addNode("tactical")}
               >
                 + Tactical node
               </button>
               <button
-                className="rounded-2xl px-4 py-2 text-left text-sm text-rose-100 hover:bg-white/5"
+                className={`rounded-2xl px-4 py-2 text-left text-sm transition-colors ${
+                  theme === 'surface' ? 'text-slate-700 hover:bg-slate-100' : 'text-rose-100 hover:bg-white/5'
+                }`}
                 onClick={() => addNode("resource")}
               >
                 + Resource node
@@ -599,7 +697,11 @@ function HomeContent() {
 
           <button
             onClick={() => setAddOpen((v) => !v)}
-            className="grid h-14 w-14 place-items-center rounded-full border border-rose-300/25 bg-rose-500/20 text-rose-50 shadow-[0_0_26px_rgba(244,63,94,0.35)] backdrop-blur-md transition-transform hover:scale-[1.03]"
+            className={`grid h-14 w-14 place-items-center rounded-full border backdrop-blur-md transition-all hover:scale-[1.03] ${
+              theme === 'surface'
+                ? 'border-slate-300 bg-slate-900 text-white shadow-lg hover:bg-slate-800'
+                : 'border-rose-300/25 bg-rose-500/20 text-rose-50 shadow-[0_0_26px_rgba(244,63,94,0.35)]'
+            }`}
             title="Add node"
           >
             <span className="text-2xl leading-none">+</span>
@@ -612,7 +714,11 @@ function HomeContent() {
       {!isBathysphereActive && (
       <div className="pointer-events-none absolute bottom-5 right-24 z-50">
         <button
-          className="pointer-events-auto rounded-full border border-cyan-300/20 bg-slate-950/40 px-4 py-2 text-xs text-cyan-50 backdrop-blur-md hover:bg-slate-950/55 disabled:opacity-50"
+          className={`pointer-events-auto rounded-full border px-4 py-2 text-xs backdrop-blur-md transition-all duration-300 disabled:opacity-50 ${
+            theme === 'surface'
+              ? 'border-slate-300 bg-white/80 text-slate-600 hover:bg-slate-100 hover:text-slate-900 shadow-sm'
+              : 'border-cyan-300/20 bg-slate-950/40 text-cyan-50 hover:bg-slate-950/55'
+          }`}
           onClick={async () => {
             await clearState();
             // Reset to a blank canvas.
@@ -635,12 +741,20 @@ function HomeContent() {
       {!isBathysphereActive && (
       <div className="pointer-events-none absolute top-[72px] left-[16px] z-50 flex flex-col gap-3">
         <div className="pointer-events-auto">
-          <SurfaceButton onSurface={() => setIsSurfacing(true)} disabled={isSurfacing} />
+          <SurfaceButton 
+            onSurface={() => setIsSurfacing(true)} 
+            disabled={isSurfacing} 
+            theme={theme}
+          />
         </div>
         <div className="pointer-events-auto">
           <button
             onClick={() => setResourceChamberOpen(true)}
-            className="group flex h-12 w-12 items-center justify-center rounded-2xl border border-orange-500/30 bg-slate-950/40 text-orange-400 backdrop-blur-md transition-all hover:bg-orange-500/10 hover:shadow-[0_0_20px_rgba(249,115,22,0.2)]"
+            className={`group flex h-12 w-12 items-center justify-center rounded-2xl border backdrop-blur-md transition-all duration-300 ${
+              theme === 'surface'
+                ? 'border-slate-300 bg-white/80 text-slate-700 shadow-md hover:bg-slate-50 hover:shadow-lg'
+                : 'border-orange-500/30 bg-slate-950/40 text-orange-400 hover:bg-orange-500/10 hover:shadow-[0_0_20px_rgba(249,115,22,0.2)]'
+            }`}
             title="Open The Resource Chamber"
           >
             <Book className="h-6 w-6 transition-transform group-hover:scale-110" />
@@ -652,25 +766,44 @@ function HomeContent() {
       {/* Mascot variants (demo) */}
       {!isBathysphereActive && (
       <div className="pointer-events-none absolute bottom-5 left-5 z-50">
-        <div className="pointer-events-auto rounded-3xl border border-cyan-300/15 bg-slate-950/35 p-3 backdrop-blur-md shadow-[0_0_18px_rgba(34,211,238,0.16)]">
-          <div className="mb-2 text-[11px] tracking-widest text-cyan-100/70">MASCOTS</div>
+        <div className={`pointer-events-auto rounded-3xl border p-3 backdrop-blur-md transition-all duration-300 ${
+          theme === 'surface'
+            ? 'border-slate-300 bg-white/80 shadow-lg'
+            : 'border-cyan-300/15 bg-slate-950/35 shadow-[0_0_18px_rgba(34,211,238,0.16)]'
+        }`}>
+          <div className={`mb-2 text-[11px] tracking-widest ${theme === 'surface' ? 'text-slate-400' : 'text-cyan-100/70'}`}>MASCOTS</div>
           <div className="flex items-center gap-3">
             <div className="flex flex-col items-center gap-1">
               <Mascot
                 variant="dumbo"
                 size={44}
-                className="drop-shadow-[0_0_10px_rgba(250,204,21,0.12)]"
+                className={theme === 'surface' ? "" : "drop-shadow-[0_0_10px_rgba(250,204,21,0.12)]"}
                 showOxygenTank={true}
+                theme={theme}
               />
-              <div className="text-[10px] text-cyan-50/70">Intern</div>
+              <div className={`text-[10px] ${theme === 'surface' ? 'text-slate-500' : 'text-cyan-50/70'}`}>Intern</div>
             </div>
             <div className="flex flex-col items-center gap-1">
-              <Mascot variant="dumby" size={44} className="drop-shadow-[0_0_10px_rgba(251,146,60,0.12)]" />
-              <div className="text-[10px] text-cyan-50/70">Manager</div>
+              <Mascot 
+                variant="dumby" 
+                size={44} 
+                className={theme === 'surface' ? "" : "drop-shadow-[0_0_10px_rgba(251,146,60,0.12)]"} 
+                theme={theme}
+              />
+              <div className={`text-[10px] ${theme === 'surface' ? 'text-slate-500' : 'text-cyan-50/70'}`}>Manager</div>
+              {theme === "surface" && selectedNodeIds.size >= 2 && (
+                <button
+                  onClick={onScatter}
+                  className="mt-1 rounded-md bg-slate-900 px-2 py-0.5 text-[9px] font-bold text-white shadow-sm hover:bg-slate-700 transition-colors"
+                  title="Scatter selected nodes"
+                >
+                  SCATTER
+                </button>
+              )}
             </div>
             <div className="flex flex-col items-center gap-1">
-              <Mascot variant="grimpy" size={44} />
-              <div className="text-[10px] text-cyan-50/70">Architect</div>
+              <Mascot variant="grimpy" size={44} theme={theme} />
+              <div className={`text-[10px] ${theme === 'surface' ? 'text-slate-500' : 'text-cyan-50/70'}`}>Architect</div>
             </div>
           </div>
         </div>
@@ -698,7 +831,7 @@ function HomeContent() {
         </div>
       )}
 
-      <AgentChat onHighlightNodes={handleHighlightNodes} />
+      <AgentChat onHighlightNodes={handleHighlightNodes} theme={theme} />
     </div>
   );
 }

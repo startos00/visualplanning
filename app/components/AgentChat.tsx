@@ -17,10 +17,12 @@ type Message = {
 type AgentChatProps = {
   initialAgent?: MascotVariant;
   onHighlightNodes?: (nodeIds: string[], color: string, duration?: number) => void;
+  theme?: "abyss" | "surface";
 };
 
-export function AgentChat({ initialAgent = "dumbo", onHighlightNodes }: AgentChatProps) {
+export function AgentChat({ initialAgent = "dumbo", onHighlightNodes, theme = "abyss" }: AgentChatProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const isSurface = theme === "surface";
   const [agent, setAgent] = useState<MascotVariant>(initialAgent);
   const [isMinimized, setIsMinimized] = useState(false);
   const [input, setInput] = useState("");
@@ -194,22 +196,32 @@ export function AgentChat({ initialAgent = "dumbo", onHighlightNodes }: AgentCha
   ];
 
   const agentColors = {
-    dumbo: "border-yellow-500/40 bg-slate-950 text-white shadow-[0_0_30px_rgba(234,179,8,0.3)]",
-    dumby: "border-orange-500/40 bg-slate-950 text-white shadow-[0_0_30px_rgba(249,115,22,0.3)]",
-    grimpy: "border-cyan-500/40 bg-slate-950 text-white shadow-[0_0_30px_rgba(6,182,212,0.3)]",
+    dumbo: isSurface 
+      ? "border-slate-200 bg-white text-slate-900 shadow-xl"
+      : "border-yellow-500/40 bg-slate-950 text-white shadow-[0_0_30px_rgba(234,179,8,0.3)]",
+    dumby: isSurface
+      ? "border-slate-200 bg-white text-slate-900 shadow-xl"
+      : "border-orange-500/40 bg-slate-950 text-white shadow-[0_0_30px_rgba(249,115,22,0.3)]",
+    grimpy: isSurface
+      ? "border-slate-200 bg-white text-slate-900 shadow-xl"
+      : "border-cyan-500/40 bg-slate-950 text-white shadow-[0_0_30px_rgba(6,182,212,0.3)]",
   };
 
   const agentHeaderColors = {
-    dumbo: "from-yellow-900/60 to-slate-950",
-    dumby: "from-orange-900/60 to-slate-950",
-    grimpy: "from-cyan-900/60 to-slate-950",
+    dumbo: isSurface ? "from-yellow-50 to-white" : "from-yellow-900/60 to-slate-950",
+    dumby: isSurface ? "from-orange-50 to-white" : "from-orange-900/60 to-slate-950",
+    grimpy: isSurface ? "from-cyan-50 to-white" : "from-cyan-900/60 to-slate-950",
   };
 
   if (!isOpen) {
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-[84px] right-6 z-[100] flex h-14 w-14 items-center justify-center rounded-full border border-cyan-400/30 bg-slate-950/80 text-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.3)] backdrop-blur-md transition-all hover:scale-110 hover:border-cyan-400/50"
+        className={`fixed bottom-[84px] right-6 z-[100] flex h-14 w-14 items-center justify-center rounded-full border backdrop-blur-md transition-all hover:scale-110 ${
+          isSurface
+            ? "border-slate-300 bg-white text-slate-700 shadow-lg hover:bg-slate-50"
+            : "border-cyan-400/30 bg-slate-950/80 text-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.3)] hover:border-cyan-400/50"
+        }`}
       >
         <MessageCircle className="h-6 w-6" />
       </button>
@@ -224,20 +236,20 @@ export function AgentChat({ initialAgent = "dumbo", onHighlightNodes }: AgentCha
     >
       <div className={`flex items-center justify-between bg-gradient-to-r px-4 py-3 ${agentHeaderColors[agent]}`}>
         <div className="flex items-center gap-3">
-          <Mascot variant={agent} size={28} />
+          <Mascot variant={agent} size={28} theme={theme} />
           <div className="flex flex-col">
-            <span className="text-xs font-bold uppercase tracking-widest text-white/80">
+            <span className={`text-xs font-bold uppercase tracking-widest ${isSurface ? 'text-slate-500' : 'text-white/80'}`}>
               {agent === "dumbo" ? "Intern" : agent === "dumby" ? "Manager" : "Architect"}
             </span>
-            <span className="text-sm font-semibold capitalize text-white">{agent}</span>
+            <span className={`text-sm font-semibold capitalize ${isSurface ? 'text-slate-900' : 'text-white'}`}>{agent}</span>
             {(agent === "dumbo" || agent === "dumby") && (
-              <span className="text-[10px] text-white/50 mt-0.5">
+              <span className={`text-[10px] mt-0.5 ${isSurface ? 'text-slate-400' : 'text-white/50'}`}>
                 {currentProvider === "openai" ? "OpenAI" : currentProvider === "google" ? "Gemini" : "Claude"} • {currentModel.replace(/-/g, " ")}
               </span>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-1 text-white">
+        <div className={`flex items-center gap-1 ${isSurface ? 'text-slate-400' : 'text-white'}`}>
           {(agent === "dumbo" || agent === "dumby") && (
             <AiProviderSelector
               agentType={agent as AgentType}
@@ -246,10 +258,10 @@ export function AgentChat({ initialAgent = "dumbo", onHighlightNodes }: AgentCha
               onSave={handleSavePreferences}
             />
           )}
-          <button onClick={() => setIsMinimized(!isMinimized)} className="rounded-full p-1.5 hover:bg-white/10">
+          <button onClick={() => setIsMinimized(!isMinimized)} className="rounded-full p-1.5 hover:bg-black/5">
             {isMinimized ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
-          <button onClick={() => setIsOpen(false)} className="rounded-full p-1.5 hover:bg-white/10">
+          <button onClick={() => setIsOpen(false)} className="rounded-full p-1.5 hover:bg-black/5">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -257,13 +269,15 @@ export function AgentChat({ initialAgent = "dumbo", onHighlightNodes }: AgentCha
 
       {!isMinimized && (
         <>
-          <div className="flex gap-2 border-b border-white/5 bg-slate-950/40 p-2">
+          <div className={`flex gap-2 border-b p-2 ${isSurface ? 'border-slate-100 bg-slate-50/50' : 'border-white/5 bg-slate-950/40'}`}>
             {(["dumbo", "dumby", "grimpy"] as MascotVariant[]).map((v) => (
               <button
                 key={v}
                 onClick={() => setAgent(v)}
                 className={`flex-1 rounded-xl py-1 text-[10px] font-bold uppercase tracking-wider transition-all ${
-                  agent === v ? "bg-white/10 text-white" : "text-white/40 hover:bg-white/5 hover:text-white/60"
+                  agent === v 
+                    ? isSurface ? "bg-white text-slate-900 shadow-sm border border-slate-200" : "bg-white/10 text-white" 
+                    : isSurface ? "text-slate-400 hover:text-slate-600 hover:bg-white/50" : "text-white/40 hover:bg-white/5 hover:text-white/60"
                 }`}
               >
                 {v}
@@ -271,30 +285,34 @@ export function AgentChat({ initialAgent = "dumbo", onHighlightNodes }: AgentCha
             ))}
           </div>
 
-          <div ref={scrollRef} className="flex-1 overflow-y-auto bg-black/40 p-4 space-y-4">
+          <div ref={scrollRef} className={`flex-1 overflow-y-auto p-4 space-y-4 ${isSurface ? 'bg-slate-50/30' : 'bg-black/40'}`}>
             {messages.length === 0 && (
-              <div className="flex h-full flex-col items-center justify-center text-center text-white">
-                <Sparkles className="mb-3 h-10 w-10 text-cyan-400" />
+              <div className={`flex h-full flex-col items-center justify-center text-center ${isSurface ? 'text-slate-900' : 'text-white'}`}>
+                <Sparkles className={`mb-3 h-10 w-10 ${isSurface ? 'text-cyan-600' : 'text-cyan-400'}`} />
                 <p className="text-base font-bold tracking-wide">How can {agent} help you today?</p>
-                <p className="mt-2 text-xs text-white/60">Ask about deadlines to see them glow on your canvas!</p>
+                <p className={`mt-2 text-xs ${isSurface ? 'text-slate-500' : 'text-white/60'}`}>Ask about deadlines to see them glow on your canvas!</p>
               </div>
             )}
             {messages.map((m) => (
               <div key={m.id} className={`flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}>
                 <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-md ${
+                  className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
                     m.role === "user"
-                      ? "bg-cyan-600 text-white border-2 border-cyan-400/50"
-                      : "bg-slate-800 text-white border-2 border-slate-600"
+                      ? isSurface 
+                        ? "bg-slate-800 text-white" 
+                        : "bg-cyan-600 text-white border-2 border-cyan-400/50"
+                      : isSurface
+                        ? "bg-white text-slate-900 border border-slate-200"
+                        : "bg-slate-800 text-white border-2 border-slate-600"
                   }`}
                 >
                   <ReactMarkdown
                     components={{
-                      p: ({ children }) => <p className="mb-2 last:mb-0 text-white">{children}</p>,
-                      ul: ({ children }) => <ul className="mb-2 ml-4 list-disc text-white space-y-1">{children}</ul>,
-                      ol: ({ children }) => <ol className="mb-2 ml-4 list-decimal text-white space-y-1">{children}</ol>,
-                      li: ({ children }) => <li className="pl-1 text-white">{children}</li>,
-                      strong: ({ children }) => <strong className="font-bold text-yellow-300">{children}</strong>,
+                      p: ({ children }) => <p className={`mb-2 last:mb-0 ${isSurface && m.role !== 'user' ? 'text-slate-800' : 'text-white'}`}>{children}</p>,
+                      ul: ({ children }) => <ul className={`mb-2 ml-4 list-disc space-y-1 ${isSurface && m.role !== 'user' ? 'text-slate-800' : 'text-white'}`}>{children}</ul>,
+                      ol: ({ children }) => <ol className={`mb-2 ml-4 list-decimal space-y-1 ${isSurface && m.role !== 'user' ? 'text-slate-800' : 'text-white'}`}>{children}</ol>,
+                      li: ({ children }) => <li className={`pl-1 ${isSurface && m.role !== 'user' ? 'text-slate-800' : 'text-white'}`}>{children}</li>,
+                      strong: ({ children }) => <strong className={`font-bold ${isSurface ? 'text-yellow-700' : 'text-yellow-300'}`}>{children}</strong>,
                     }}
                   >
                     {m.content}
@@ -303,30 +321,34 @@ export function AgentChat({ initialAgent = "dumbo", onHighlightNodes }: AgentCha
               </div>
             ))}
             {isLoading && (
-              <div className="flex items-center gap-2 text-sm text-white/80 px-2">
+              <div className={`flex items-center gap-2 text-sm px-2 ${isSurface ? 'text-slate-600' : 'text-white/80'}`}>
                 <div className="flex gap-1">
-                  <div className="h-2 w-2 animate-bounce rounded-full bg-cyan-400" />
-                  <div className="h-2 w-2 animate-bounce rounded-full bg-cyan-400 [animation-delay:0.2s]" />
-                  <div className="h-2 w-2 animate-bounce rounded-full bg-cyan-400 [animation-delay:0.4s]" />
+                  <div className={`h-2 w-2 animate-bounce rounded-full ${isSurface ? 'bg-slate-400' : 'bg-cyan-400'}`} />
+                  <div className={`h-2 w-2 animate-bounce rounded-full ${isSurface ? 'bg-slate-400' : 'bg-cyan-400'} [animation-delay:0.2s]`} />
+                  <div className={`h-2 w-2 animate-bounce rounded-full ${isSurface ? 'bg-slate-400' : 'bg-cyan-400'} [animation-delay:0.4s]`} />
                 </div>
                 <span className="font-medium">{agent} is thinking...</span>
               </div>
             )}
             {error && (
-              <div className="rounded-xl border-2 border-red-500 bg-red-950/50 p-4 text-sm text-white font-semibold">
+              <div className="rounded-xl border-2 border-red-500 bg-red-50 p-4 text-sm text-red-700 font-semibold">
                 ⚠️ {error}
               </div>
             )}
           </div>
 
           {agent === "dumbo" && (
-            <div className="flex flex-wrap gap-2 px-4 py-3 bg-slate-900/80 border-t border-white/10">
+            <div className={`flex flex-wrap gap-2 px-4 py-3 border-t ${isSurface ? 'bg-white border-slate-100' : 'bg-slate-900/80 border-white/10'}`}>
               {quickCommands.map((cmd) => (
                 <button
                   key={cmd.label}
                   onClick={(e) => handleSubmit(e, cmd.text)}
                   disabled={isLoading}
-                  className="flex items-center gap-1.5 rounded-full border-2 border-yellow-500/40 bg-yellow-600/20 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-yellow-200 transition-all hover:bg-yellow-600/30 hover:scale-105 active:scale-95 disabled:opacity-50"
+                  className={`flex items-center gap-1.5 rounded-full border-2 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-all hover:scale-105 active:scale-95 disabled:opacity-50 ${
+                    isSurface
+                      ? "border-yellow-200 bg-yellow-50 text-yellow-800 hover:bg-yellow-100"
+                      : "border-yellow-500/40 bg-yellow-600/20 text-yellow-200 hover:bg-yellow-600/30"
+                  }`}
                 >
                   <cmd.icon className="h-3 w-3" />
                   {cmd.label}
@@ -335,7 +357,7 @@ export function AgentChat({ initialAgent = "dumbo", onHighlightNodes }: AgentCha
             </div>
           )}
 
-          <form onSubmit={(e) => handleSubmit(e)} className="border-t-2 border-white/10 p-4 bg-slate-900">
+          <form onSubmit={(e) => handleSubmit(e)} className={`border-t p-4 ${isSurface ? 'bg-white border-slate-100' : 'bg-slate-900 border-white/10'}`}>
             <div className="flex gap-2">
               <input
                 ref={inputRef}
@@ -343,7 +365,11 @@ export function AgentChat({ initialAgent = "dumbo", onHighlightNodes }: AgentCha
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder={`Talk to ${agent}...`}
-                className="flex-1 rounded-xl border-2 border-white/20 bg-black/60 px-4 py-2.5 text-base text-white placeholder:text-slate-400 outline-none focus:border-cyan-400 focus:bg-black/80"
+                className={`flex-1 rounded-xl border-2 px-4 py-2.5 text-base outline-none transition-all focus:border-cyan-400 ${
+                  isSurface
+                    ? "border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400 focus:bg-white"
+                    : "border-white/20 bg-black/60 text-white placeholder:text-slate-400 focus:bg-black/80"
+                }`}
                 disabled={isLoading}
               />
               <button
