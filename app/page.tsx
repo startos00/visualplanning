@@ -258,11 +258,19 @@ function HomeContent() {
     // Optional: Pan to show highlighted nodes
     if (nodeIds.length > 0 && rfRef.current) {
       const highlightedNodeObjects = nodes.filter(n => nodeIds.includes(n.id));
-      if (highlightedNodeObjects.length > 0) {
+      if (highlightedNodeObjects.length === 1) {
+        // Zoom into single node
+        const node = highlightedNodeObjects[0];
+        rfRef.current.setCenter(node.position.x + 150, node.position.y + 100, {
+          zoom: 1.2,
+          duration: 1000,
+        });
+      } else if (highlightedNodeObjects.length > 1) {
+        // Fit view for multiple nodes
         rfRef.current.fitView({
           nodes: highlightedNodeObjects,
-          padding: 0.3,
-          duration: 800,
+          padding: 0.4, // More padding to see surrounding context
+          duration: 1000,
         });
       }
     }

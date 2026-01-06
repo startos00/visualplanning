@@ -65,7 +65,7 @@ export async function POST(request: Request) {
       
       When you receive deadline scan results, present them in a friendly, organized way:
       - Use emojis and enthusiasm
-      - Group by urgency (overdue, today, upcoming)
+      - Group by urgency (overdue, today, tomorrow, upcoming)
       - Be specific about each task
       - Offer encouragement
       
@@ -86,6 +86,9 @@ export async function POST(request: Request) {
         } else if (/\b(today)\b/i.test(query)) {
           shouldExecuteToolFirst = true;
           queryType = "today";
+        } else if (/\b(tomorrow)\b/i.test(query)) {
+          shouldExecuteToolFirst = true;
+          queryType = "tomorrow";
         } else if (/\b(upcoming|urgent)\b/i.test(query)) {
           shouldExecuteToolFirst = true;
           queryType = "upcoming";
@@ -164,24 +167,31 @@ export async function POST(request: Request) {
       let highlightColor = "cyan";
       
       switch (queryType) {
-        case "overdue":
+        case "overdue" as any:
           nodeIdsToHighlight = deadlineResults.overdue.map(t => t.id);
           highlightColor = "red";
           break;
-        case "today":
+        case "today" as any:
           nodeIdsToHighlight = deadlineResults.today.map(t => t.id);
           highlightColor = "yellow";
           break;
-        case "upcoming":
+        case "tomorrow" as any:
+          nodeIdsToHighlight = deadlineResults.tomorrow.map(t => t.id);
+          highlightColor = "blue"; // Using blue for tomorrow as well
+          break;
+        case "upcoming" as any:
           nodeIdsToHighlight = deadlineResults.upcoming.map(t => t.id);
           highlightColor = "blue";
           break;
-        case "all":
+        case "all" as any:
           nodeIdsToHighlight = [
             ...deadlineResults.overdue.map(t => t.id),
             ...deadlineResults.today.map(t => t.id),
+            ...deadlineResults.tomorrow.map(t => t.id),
             ...deadlineResults.upcoming.map(t => t.id),
           ];
+          // Filter duplicates
+          nodeIdsToHighlight = Array.from(new Set(nodeIdsToHighlight));
           // For "all", use color based on urgency - we'll handle this on the frontend
           highlightColor = "multi";
           break;

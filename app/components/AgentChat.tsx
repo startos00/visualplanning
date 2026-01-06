@@ -189,6 +189,7 @@ export function AgentChat({ initialAgent = "dumbo", onHighlightNodes }: AgentCha
     { label: "Scan Deadlines", icon: Search, text: "scan deadlines" },
     { label: "Overdue", icon: AlertTriangle, text: "What's overdue?" },
     { label: "Today", icon: Calendar, text: "What's due today?" },
+    { label: "Tomorrow", icon: Calendar, text: "What's due tomorrow?" },
     { label: "Urgent", icon: Clock, text: "Show me urgent tasks" },
   ];
 

@@ -1268,10 +1268,10 @@ input:-webkit-autofill:active {
 .node-highlight-red {
   animation: nodeGlowPulse 2s ease-in-out infinite;
   box-shadow: 
-    0 0 30px rgba(239, 68, 68, 0.6),
-    0 0 60px rgba(239, 68, 68, 0.4),
-    0 0 90px rgba(239, 68, 68, 0.2),
-    inset 0 0 20px rgba(239, 68, 68, 0.3) !important;
+    0 0 15px rgba(239, 68, 68, 0.6),
+    0 0 30px rgba(239, 68, 68, 0.4),
+    0 0 45px rgba(239, 68, 68, 0.2),
+    inset 0 0 10px rgba(239, 68, 68, 0.3) !important;
   border: 2px solid rgba(239, 68, 68, 0.8) !important;
   z-index: 1000 !important;
 }
@@ -1280,10 +1280,10 @@ input:-webkit-autofill:active {
 .node-highlight-yellow {
   animation: nodeGlowPulse 2s ease-in-out infinite;
   box-shadow: 
-    0 0 30px rgba(234, 179, 8, 0.6),
-    0 0 60px rgba(234, 179, 8, 0.4),
-    0 0 90px rgba(234, 179, 8, 0.2),
-    inset 0 0 20px rgba(234, 179, 8, 0.3) !important;
+    0 0 15px rgba(234, 179, 8, 0.6),
+    0 0 30px rgba(234, 179, 8, 0.4),
+    0 0 45px rgba(234, 179, 8, 0.2),
+    inset 0 0 10px rgba(234, 179, 8, 0.3) !important;
   border: 2px solid rgba(234, 179, 8, 0.8) !important;
   z-index: 1000 !important;
 }
@@ -1292,10 +1292,10 @@ input:-webkit-autofill:active {
 .node-highlight-blue {
   animation: nodeGlowPulse 2s ease-in-out infinite;
   box-shadow: 
-    0 0 30px rgba(59, 130, 246, 0.6),
-    0 0 60px rgba(59, 130, 246, 0.4),
-    0 0 90px rgba(59, 130, 246, 0.2),
-    inset 0 0 20px rgba(59, 130, 246, 0.3) !important;
+    0 0 15px rgba(59, 130, 246, 0.6),
+    0 0 30px rgba(59, 130, 246, 0.4),
+    0 0 45px rgba(59, 130, 246, 0.2),
+    inset 0 0 10px rgba(59, 130, 246, 0.3) !important;
   border: 2px solid rgba(59, 130, 246, 0.8) !important;
   z-index: 1000 !important;
 }
@@ -1304,10 +1304,10 @@ input:-webkit-autofill:active {
 .node-highlight-cyan {
   animation: nodeGlowPulse 2s ease-in-out infinite;
   box-shadow: 
-    0 0 30px rgba(34, 211, 238, 0.6),
-    0 0 60px rgba(34, 211, 238, 0.4),
-    0 0 90px rgba(34, 211, 238, 0.2),
-    inset 0 0 20px rgba(34, 211, 238, 0.3) !important;
+    0 0 15px rgba(34, 211, 238, 0.6),
+    0 0 30px rgba(34, 211, 238, 0.4),
+    0 0 45px rgba(34, 211, 238, 0.2),
+    inset 0 0 10px rgba(34, 211, 238, 0.3) !important;
   border: 2px solid rgba(34, 211, 238, 0.8) !important;
   z-index: 1000 !important;
 }

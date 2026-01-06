@@ -11,6 +11,7 @@ export interface DeadlineResult {
   overdue: DeadlineTask[];
   upcoming: DeadlineTask[];
   today: DeadlineTask[];
+  tomorrow: DeadlineTask[];
   summary: string;
 }
 
@@ -18,11 +19,16 @@ export async function checkDeadlines(nodes: GrimpoNode[], userToday?: string): P
   const now = userToday ? new Date(userToday) : new Date();
   const todayStr = now.toISOString().split("T")[0];
   
-  console.log(`[checkDeadlines] Reference 'today' is: ${todayStr} (Source: ${userToday ? 'Client' : 'Server'})`);
+  const tomorrowDate = new Date(now);
+  tomorrowDate.setDate(now.getDate() + 1);
+  const tomorrowStr = tomorrowDate.toISOString().split("T")[0];
+  
+  console.log(`[checkDeadlines] Reference 'today' is: ${todayStr}, 'tomorrow' is: ${tomorrowStr} (Source: ${userToday ? 'Client' : 'Server'})`);
   
   const overdue: DeadlineTask[] = [];
   const upcoming: DeadlineTask[] = [];
   const today: DeadlineTask[] = [];
+  const tomorrow: DeadlineTask[] = [];
 
   // Filter to only check tactical cards
   const tacticalNodes = nodes.filter((node) => node.type === "tactical");
@@ -145,6 +151,9 @@ export async function checkDeadlines(nodes: GrimpoNode[], userToday?: string): P
       } else if (deadline === todayStr) {
         today.push(task);
         upcoming.push(task); // Today is also upcoming in a broad sense
+      } else if (deadline === tomorrowStr) {
+        tomorrow.push(task);
+        upcoming.push(task);
       } else {
         upcoming.push(task);
       }
@@ -155,7 +164,8 @@ export async function checkDeadlines(nodes: GrimpoNode[], userToday?: string): P
     overdue,
     upcoming,
     today,
-    summary: `I scanned ${tacticalNodes.length} tactical card${tacticalNodes.length !== 1 ? 's' : ''} and found ${overdue.length} overdue task${overdue.length !== 1 ? 's' : ''}, ${today.length} due today, and ${upcoming.length - today.length} more coming up soon!`,
+    tomorrow,
+    summary: `I scanned ${tacticalNodes.length} tactical card${tacticalNodes.length !== 1 ? 's' : ''} and found ${overdue.length} overdue task${overdue.length !== 1 ? 's' : ''}, ${today.length} due today, ${tomorrow.length} due tomorrow, and ${upcoming.length - today.length - tomorrow.length} more coming up soon!`,
   };
 }
 
