@@ -7,15 +7,13 @@ import { google } from "@ai-sdk/google";
 import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
 import { db } from "@/app/lib/db";
-import { graphStates } from "@/app/lib/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { grimpoStates } from "@/app/lib/db/schema";
+import { eq, desc } from "drizzle-orm";
 import { checkDeadlines } from "@/app/lib/ai/tools/checkDeadlines";
 import { getProviderAndModel } from "@/app/lib/ai/getUserPreferences";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-
-const GRAPH_STATE_ID = "main";
 
 export async function POST(request: Request) {
   try {
@@ -140,18 +138,23 @@ export async function POST(request: Request) {
     if (agent === "dumbo" && shouldExecuteToolFirst && queryType) {
       console.log(`Executing checkDeadlines tool for user ${userId}...`);
       
-      // Try to find the most recently updated graph state for this user
+      // Try to find the most recently updated graph state for this user in grimpoStates
+      // This is the table used by the main application's Server Actions
       const states = await db
-        .select({ nodes: graphStates.nodes, id: graphStates.id })
-        .from(graphStates)
-        .where(eq(graphStates.userId, userId))
-        .orderBy(desc(graphStates.updatedAt));
+        .select({ nodes: grimpoStates.nodes, id: grimpoStates.id })
+        .from(grimpoStates)
+        .where(eq(grimpoStates.userId, userId))
+        .orderBy(desc(grimpoStates.updatedAt))
+        .limit(1);
 
-      console.log(`Found ${states.length} potential graph states in database.`);
+      console.log(`Found ${states.length} potential graph states in grimpo_states table.`);
 
       // Use the first one found (most recently updated), or default to empty
       const nodes = (states[0]?.nodes as any[]) || [];
       console.log(`Selected graph state ID: "${states[0]?.id || 'none'}" with ${nodes.length} nodes.`);
+      if (nodes.length > 0) {
+        console.log(`First node title sample: "${nodes[0]?.data?.title || 'no title'}"`);
+      }
       
       const deadlineResults = await checkDeadlines(nodes, userDateTime);
       console.log(`checkDeadlines result:`, deadlineResults);
