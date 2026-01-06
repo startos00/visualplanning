@@ -104,7 +104,8 @@ export async function POST(request: Request) {
       model: provider === "google" ? google(modelId) : anthropic(modelId),
       system: "You summarise documents into a structured, accurate, skimmable Markdown summary.",
       prompt: buildPrompt(clippedText),
-      maxTokens: 900,
+      // AI SDK v6 uses `maxOutputTokens` (not `maxTokens`)
+      maxOutputTokens: 900,
     });
 
     const userId = session.user.id;

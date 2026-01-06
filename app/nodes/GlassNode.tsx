@@ -268,7 +268,8 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
       pdfBytes = await proxyRes.arrayBuffer();
     }
 
-    const pdfjs = await import("pdfjs-dist/legacy/build/pdf");
+    // pdfjs-dist v4 exposes ESM entrypoints as `.mjs`
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
     // @ts-ignore
     pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
@@ -297,7 +298,7 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
     setAiStatus(`OCR running (pages 1-${pageCount})…`);
 
     const tesseract = await import("tesseract.js");
-    const worker = await tesseract.createWorker({
+    const worker = await tesseract.createWorker("eng", 1, {
       logger: (m: any) => {
         if (!m || typeof m !== "object") return;
         const status = m.status;
@@ -310,9 +311,6 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
     });
 
     try {
-      await worker.loadLanguage("eng");
-      await worker.initialize("eng");
-
       let ocrText = "";
       for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
         setAiStatus(`Rendering page ${pageNum}/${pageCount}…`);

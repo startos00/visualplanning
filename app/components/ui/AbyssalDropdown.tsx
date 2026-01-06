@@ -28,7 +28,11 @@ export function AbyssalDropdown({
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Ensure we always have a valid value
   const selectedOption = options.find((opt) => opt.value === value);
+  const fallbackValue = options.length > 0 ? options[0].value : "";
+  const displayValue = selectedOption ? value : fallbackValue;
+  const displayOption = options.find((opt) => opt.value === displayValue) || options[0] || null;
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -49,7 +53,7 @@ export function AbyssalDropdown({
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center justify-between gap-2 rounded-full border border-cyan-300/15 bg-slate-950/40 px-3 py-1 text-xs text-cyan-50 outline-none hover:bg-slate-950/60 focus:border-cyan-300/40 transition-all shadow-[0_0_10px_rgba(34,211,238,0.05)]"
       >
-        <span>{selectedOption?.label || "Select..."}</span>
+        <span>{displayOption?.label || selectedOption?.label || (options.length > 0 ? options[0].label : "Select...")}</span>
         <ChevronDown className={`h-3 w-3 text-cyan-200/50 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
       </button>
 

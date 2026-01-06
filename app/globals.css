@@ -1251,3 +1251,69 @@ input:-webkit-autofill:active {
   opacity: 0.5;
   pointer-events: none;
 }
+
+/* Node Highlighting Animations - For AI Agent Visual Feedback */
+@keyframes nodeGlowPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.03);
+    opacity: 0.95;
+  }
+}
+
+/* Red glow for overdue tasks */
+.node-highlight-red {
+  animation: nodeGlowPulse 2s ease-in-out infinite;
+  box-shadow: 
+    0 0 30px rgba(239, 68, 68, 0.6),
+    0 0 60px rgba(239, 68, 68, 0.4),
+    0 0 90px rgba(239, 68, 68, 0.2),
+    inset 0 0 20px rgba(239, 68, 68, 0.3) !important;
+  border: 2px solid rgba(239, 68, 68, 0.8) !important;
+  z-index: 1000 !important;
+}
+
+/* Yellow glow for today's tasks */
+.node-highlight-yellow {
+  animation: nodeGlowPulse 2s ease-in-out infinite;
+  box-shadow: 
+    0 0 30px rgba(234, 179, 8, 0.6),
+    0 0 60px rgba(234, 179, 8, 0.4),
+    0 0 90px rgba(234, 179, 8, 0.2),
+    inset 0 0 20px rgba(234, 179, 8, 0.3) !important;
+  border: 2px solid rgba(234, 179, 8, 0.8) !important;
+  z-index: 1000 !important;
+}
+
+/* Blue glow for upcoming tasks */
+.node-highlight-blue {
+  animation: nodeGlowPulse 2s ease-in-out infinite;
+  box-shadow: 
+    0 0 30px rgba(59, 130, 246, 0.6),
+    0 0 60px rgba(59, 130, 246, 0.4),
+    0 0 90px rgba(59, 130, 246, 0.2),
+    inset 0 0 20px rgba(59, 130, 246, 0.3) !important;
+  border: 2px solid rgba(59, 130, 246, 0.8) !important;
+  z-index: 1000 !important;
+}
+
+/* Cyan glow for mixed/all deadlines */
+.node-highlight-cyan {
+  animation: nodeGlowPulse 2s ease-in-out infinite;
+  box-shadow: 
+    0 0 30px rgba(34, 211, 238, 0.6),
+    0 0 60px rgba(34, 211, 238, 0.4),
+    0 0 90px rgba(34, 211, 238, 0.2),
+    inset 0 0 20px rgba(34, 211, 238, 0.3) !important;
+  border: 2px solid rgba(34, 211, 238, 0.8) !important;
+  z-index: 1000 !important;
+}
+
+/* Base highlight class */
+.node-highlight {
+  transition: all 0.3s ease-in-out;
+  position: relative;
+}

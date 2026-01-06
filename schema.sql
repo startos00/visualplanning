@@ -165,3 +165,18 @@ CREATE INDEX IF NOT EXISTS idx_highlights_type ON highlights(type);
 -- 2. Users to save the same highlight multiple times if needed
 -- Application-level deduplication can be added if needed
 
+-- User AI Preferences table
+-- Stores AI provider and model preferences per user per agent (Dumbo/Dumby)
+CREATE TABLE IF NOT EXISTS user_ai_preferences (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  agent_type TEXT NOT NULL CHECK (agent_type IN ('dumbo', 'dumby')),
+  provider TEXT NOT NULL CHECK (provider IN ('openai', 'google', 'anthropic')),
+  model TEXT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, agent_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_ai_preferences_user_id ON user_ai_preferences(user_id);
+

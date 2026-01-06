@@ -164,7 +164,8 @@ export async function POST(request: Request) {
       model: model as any, // Type assertion for AI SDK 5 compatibility
       system: "You are Dumby, an efficient Knowledge Manager. You compare documents and generate structured, actionable insights.",
       prompt: buildComparePrompt(pdfContents),
-      maxTokens: 2000,
+      // AI SDK v6 uses `maxOutputTokens` (not `maxTokens`)
+      maxOutputTokens: 2000,
     });
 
     return NextResponse.json({

@@ -59,7 +59,9 @@ function HomeContent() {
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
   const [sonarArrayOpen, setSonarArrayOpen] = useState(false);
   const [bathysphereNodeId, setBathysphereNodeId] = useState<string | null>(null);
+  const [highlightedNodes, setHighlightedNodes] = useState<{ nodeIds: string[]; color: string; }>({ nodeIds: [], color: '' });
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const highlightTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const rfRef = useRef<ReactFlowInstance | null>(null);
@@ -238,6 +240,34 @@ function HomeContent() {
     setOctopusInstances((prev) => prev.filter((id) => id !== octopusId));
   }, []);
 
+  // Handle node highlighting from AI agent
+  const handleHighlightNodes = useCallback((nodeIds: string[], color: string, duration: number = 8000) => {
+    // Clear any existing highlight timeout
+    if (highlightTimeoutRef.current) {
+      clearTimeout(highlightTimeoutRef.current);
+    }
+
+    // Set the new highlighted nodes
+    setHighlightedNodes({ nodeIds, color });
+
+    // Auto-clear after duration
+    highlightTimeoutRef.current = setTimeout(() => {
+      setHighlightedNodes({ nodeIds: [], color: '' });
+    }, duration);
+
+    // Optional: Pan to show highlighted nodes
+    if (nodeIds.length > 0 && rfRef.current) {
+      const highlightedNodeObjects = nodes.filter(n => nodeIds.includes(n.id));
+      if (highlightedNodeObjects.length > 0) {
+        rfRef.current.fitView({
+          nodes: highlightedNodeObjects,
+          padding: 0.3,
+          duration: 800,
+        });
+      }
+    }
+  }, [nodes]);
+
   // Track selected nodes from ReactFlow's internal state
   useEffect(() => {
     const selected = nodes.filter((n) => n.selected).map((n) => n.id);
@@ -294,22 +324,28 @@ function HomeContent() {
 
   // Phase 3: pass zoom + callbacks down to glass nodes (ephemeral, not persisted).
   const viewNodes = useMemo(() => {
-    return nodes.map((n) => ({
-      ...n,
-      hidden: effectiveMode === "strategy" && n.type === "tactical",
-      selected: selectedNodeIds.has(n.id),
-      data: {
-        ...n.data,
-        zoom: viewport.zoom,
-        mode: effectiveMode,
-        onUpdate: onUpdateNode,
-        onDelete: onDeleteNode,
-        onTaskDone: onTaskDone,
-        onBathysphereMode: handleBathysphereMode,
-        onExtractTask: onExtractTask,
-      },
-    }));
-  }, [effectiveMode, nodes, onDeleteNode, onTaskDone, onUpdateNode, viewport.zoom, selectedNodeIds, handleBathysphereMode, onExtractTask]);
+    return nodes.map((n) => {
+      const isHighlighted = highlightedNodes.nodeIds.includes(n.id);
+      return {
+        ...n,
+        hidden: effectiveMode === "strategy" && n.type === "tactical",
+        selected: selectedNodeIds.has(n.id),
+        className: isHighlighted ? `node-highlight node-highlight-${highlightedNodes.color}` : '',
+        data: {
+          ...n.data,
+          zoom: viewport.zoom,
+          mode: effectiveMode,
+          onUpdate: onUpdateNode,
+          onDelete: onDeleteNode,
+          onTaskDone: onTaskDone,
+          onBathysphereMode: handleBathysphereMode,
+          onExtractTask: onExtractTask,
+          isHighlighted,
+          highlightColor: isHighlighted ? highlightedNodes.color : null,
+        },
+      };
+    });
+  }, [effectiveMode, nodes, onDeleteNode, onTaskDone, onUpdateNode, viewport.zoom, selectedNodeIds, handleBathysphereMode, onExtractTask, highlightedNodes]);
 
   const defaultEdgeOptions: DefaultEdgeOptions = useMemo(
     () => ({
@@ -654,7 +690,7 @@ function HomeContent() {
         </div>
       )}
 
-      <AgentChat />
+      <AgentChat onHighlightNodes={handleHighlightNodes} />
     </div>
   );
 }

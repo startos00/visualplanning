@@ -188,6 +188,23 @@ export const bookshelves = pgTable("bookshelves", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// User AI Preferences table
+export const userAiPreferences = pgTable(
+  "user_ai_preferences",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    agentType: text("agent_type").notNull(), // 'dumbo' | 'dumby'
+    provider: text("provider").notNull(), // 'openai' | 'google' | 'anthropic'
+    model: text("model").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userAgentUnique: uniqueIndex("user_ai_preferences_user_agent_unique").on(table.userId, table.agentType),
+  }),
+);
+
 export type GraphState = typeof graphStates.$inferSelect;
 export type NewGraphState = typeof graphStates.$inferInsert;
 export type AbyssalGardenState = typeof abyssalGardenStates.$inferSelect;
@@ -208,4 +225,6 @@ export type Highlight = typeof highlights.$inferSelect;
 export type NewHighlight = typeof highlights.$inferInsert;
 export type Bookshelf = typeof bookshelves.$inferSelect;
 export type NewBookshelf = typeof bookshelves.$inferInsert;
+export type UserAiPreference = typeof userAiPreferences.$inferSelect;
+export type NewUserAiPreference = typeof userAiPreferences.$inferInsert;
 

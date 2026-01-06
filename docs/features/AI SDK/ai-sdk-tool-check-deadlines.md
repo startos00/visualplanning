@@ -32,6 +32,13 @@ As a user, I want Dumbo (my AI intern) to scan my board for deadlines, so that I
     - `today`: Array of task objects (optional subset).
     - `summary`: A brief count of items found.
 
+### 5. Command Shortcuts (UI)
+- The chat interface must provide "Quick Action" buttons for common deadline queries:
+    - **Scan Deadlines**: Trigger a full scan of all nodes.
+    - **Overdue**: Filter specifically for overdue items.
+    - **Today**: Show only items due today.
+    - **Urgent**: (Future) Prioritize based on proximity and importance.
+
 ## Data Requirements
 - **Node Data Schema**: Nodes should ideally support a `dueDate` field in their `data` object.
 - **Context**: The tool requires the full `nodes` array from the current graph state.

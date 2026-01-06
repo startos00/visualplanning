@@ -5,6 +5,7 @@ import { streamText } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { google } from "@ai-sdk/google";
+import { getProviderAndModel } from "@/app/lib/ai/getUserPreferences";
 
 export const runtime = "nodejs";
 
@@ -15,6 +16,8 @@ type InterrogateBody = {
   context?: string; // The highlighted text snippet (optional)
   intent: InterrogateIntent;
   documentTitle?: string;
+  provider?: string; // Optional provider override
+  model?: string; // Optional model override
 };
 
 function buildSystemPrompt(intent: InterrogateIntent, documentTitle?: string): string {
@@ -36,22 +39,6 @@ function buildSystemPrompt(intent: InterrogateIntent, documentTitle?: string): s
   }
 }
 
-function getProvider() {
-  const raw = (process.env.DUMBY_INTERROGATE_PROVIDER || "openai").trim().toLowerCase();
-  if (raw === "anthropic") return "anthropic";
-  if (raw === "google") return "google";
-  return "openai";
-}
-
-function getModelId(provider: string): string {
-  const raw = process.env.DUMBY_INTERROGATE_MODEL?.trim();
-  if (raw) return raw;
-  
-  // Defaults
-  if (provider === "anthropic") return "claude-3-5-sonnet-latest";
-  if (provider === "google") return "gemini-3-flash-preview";
-  return "gpt-4o-mini"; // Default to OpenAI
-}
 
 export async function POST(request: Request) {
   try {
@@ -61,7 +48,7 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json()) as Partial<InterrogateBody>;
-    const { messages, context, intent, documentTitle } = body;
+    const { messages, context, intent, documentTitle, provider: requestProvider, model: requestModel } = body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json({ error: "Missing or invalid messages" }, { status: 400 });
@@ -71,8 +58,15 @@ export async function POST(request: Request) {
     console.log(`Dumby Interrogate: document="${documentTitle}", contextLength=${contextText.length}, intent=${intent}`);
 
     const validIntent: InterrogateIntent = intent === "EXPLAIN" || intent === "CRITIQUE" ? intent : "GENERAL";
-    const provider = getProvider();
-    const modelId = getModelId(provider);
+    
+    // Get provider and model with fallback chain: User Preference → Request Param → Env Var → Default
+    const userId = session.user.id;
+    const { provider, model: modelId } = await getProviderAndModel(
+      userId,
+      "dumby",
+      requestProvider,
+      requestModel
+    );
 
     // Check API keys
     if (provider === "openai" && !process.env.OPENAI_API_KEY) {
