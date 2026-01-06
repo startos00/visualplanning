@@ -34,6 +34,7 @@ import { DecompressionOverlay } from "@/app/components/auth/DecompressionOverlay
 import { FloatingControlBar } from "@/app/components/FloatingControlBar";
 import { SonarArray } from "@/app/components/SonarArray";
 import { DumbyReader } from "@/app/components/DumbyReader";
+import { AgentChat } from "@/app/components/AgentChat";
 import type { GrimpoNode } from "@/app/lib/graph";
 
 // Define these outside the component to prevent re-creation on every render
@@ -652,6 +653,8 @@ function HomeContent() {
           )}
         </div>
       )}
+
+      <AgentChat />
     </div>
   );
 }

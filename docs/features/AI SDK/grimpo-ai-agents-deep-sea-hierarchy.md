@@ -70,14 +70,14 @@ As a user, I want to choose between specialized AI agents (Dumbo, Dumby, Grimpy)
 “You are Dumbo, an eager Dumbo Octopus intern in the Abyssal Zone. You love helping with small tasks. You speak cheerfully. Your main job is to track deadlines, keep the user happy, and break through inertia. If the user is stressed, offer to dance. If they are stuck, suggest a 'Dive' with the Oxygen Tank.”
 
 #### Dumbo Tools
-1. **checkDeadlines**
+1. **checkDeadlines** ([Detail](./ai-sdk-tool-check-deadlines.md))
    - Scan all nodes for explicit deadline fields and/or date-like text.
    - Return:
      - overdue tasks list
      - upcoming tasks list
      - per-item parsing confidence and source node id
 
-2. **groupTasks**
+2. **groupTasks** ([Detail](./ai-sdk-tool-group-tasks.md))
    - Group scattered task nodes into a cluster based on a shared tag.
    - Must preserve existing node content; only positions/cluster metadata change.
 

@@ -155,7 +155,8 @@ export async function POST(request: Request) {
       model,
       system: systemPrompt,
       messages: enhancedMessages as any,
-      maxTokens: 1000,
+      // AI SDK v6 uses `maxOutputTokens` (not `maxTokens`)
+      maxOutputTokens: 1000,
     });
 
     // Return UI message stream response - this is what useChat expects

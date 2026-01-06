@@ -16,6 +16,7 @@ interface OxygenTankState {
 interface OxygenTankContextType extends OxygenTankState {
   timeLeft: number;
   progress: number;
+  isHydrated: boolean;
   startDive: (mins: number) => void;
   pauseDive: () => void;
   resumeDive: () => void;
@@ -28,50 +29,41 @@ const STORAGE_KEY = "oxygen_tank_state";
 const OxygenTankContext = createContext<OxygenTankContextType | undefined>(undefined);
 
 export function OxygenTankProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<OxygenTankState>(() => {
-    if (typeof window === "undefined") {
-      return {
-        status: "idle",
-        duration: 25 * 60,
-        startTime: null,
-        pausedAt: null,
-        accumulatedPausedTime: 0,
-        isPinned: false,
-      };
-    }
+  const [state, setState] = useState<OxygenTankState>({
+    status: "idle",
+    duration: 25 * 60,
+    startTime: null,
+    pausedAt: null,
+    accumulatedPausedTime: 0,
+    isPinned: false,
+  });
+
+  const [timeLeft, setTimeLeft] = useState(25 * 60);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  // Load state from localStorage on mount
+  useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        return {
-          status: "idle",
-          duration: 25 * 60,
-          startTime: null,
-          pausedAt: null,
-          accumulatedPausedTime: 0,
-          isPinned: false,
+        setState((s) => ({
+          ...s,
           ...parsed,
-        };
+        }));
       } catch (e) {
         console.error("Failed to parse Oxygen Tank state", e);
       }
     }
-    return {
-      status: "idle",
-      duration: 25 * 60,
-      startTime: null,
-      pausedAt: null,
-      accumulatedPausedTime: 0,
-      isPinned: false,
-    };
-  });
-
-  const [timeLeft, setTimeLeft] = useState(0);
+    setIsHydrated(true);
+  }, []);
 
   // Sync state to localStorage
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [state]);
+    if (isHydrated) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+  }, [state, isHydrated]);
 
   // Timer logic
   useEffect(() => {
@@ -158,12 +150,13 @@ export function OxygenTankProvider({ children }: { children: ReactNode }) {
     ...state,
     timeLeft,
     progress,
+    isHydrated,
     startDive,
     pauseDive,
     resumeDive,
     resetDive,
     togglePin,
-  }), [state, timeLeft, progress, startDive, pauseDive, resumeDive, resetDive, togglePin]);
+  }), [state, timeLeft, progress, isHydrated, startDive, pauseDive, resumeDive, resetDive, togglePin]);
 
   return <OxygenTankContext.Provider value={value}>{children}</OxygenTankContext.Provider>;
 }
