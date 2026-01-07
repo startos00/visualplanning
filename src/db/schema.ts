@@ -2,7 +2,7 @@
 // Run the SQL from schema.sql in Neon console - do NOT use drizzle-kit migrations
 // This file contains TypeScript definitions for Drizzle queries only
 
-import { pgTable, text, timestamp, uuid, jsonb, serial, varchar, boolean, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, jsonb, serial, varchar, boolean, uniqueIndex, index } from "drizzle-orm/pg-core";
 
 // Canvases table
 export const canvases = pgTable("canvases", {
@@ -14,6 +14,25 @@ export const canvases = pgTable("canvases", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+// Projects table (aka Sectors)
+export const projects = pgTable(
+  "projects",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    nodes: jsonb("nodes").notNull().default([]),
+    edges: jsonb("edges").notNull().default([]),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("idx_projects_user_id").on(table.userId),
+    updatedAtIdx: index("idx_projects_updated_at").on(table.updatedAt),
+  }),
+);
 
 // Grimpo states table
 export const grimpoStates = pgTable("grimpo_states", {
@@ -111,6 +130,8 @@ export const highlights = pgTable(
 
 export type Canvas = typeof canvases.$inferSelect;
 export type NewCanvas = typeof canvases.$inferInsert;
+export type Project = typeof projects.$inferSelect;
+export type NewProject = typeof projects.$inferInsert;
 export type GrimpoState = typeof grimpoStates.$inferSelect;
 export type NewGrimpoState = typeof grimpoStates.$inferInsert;
 export type User = typeof users.$inferSelect;

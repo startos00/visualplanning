@@ -266,14 +266,14 @@ export function ResourceChamber({ isOpen, onClose, onAddResource }: Props) {
       {/* Backdrop for mobile */}
       {isOpen && (
         <div 
-          className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-sm md:hidden"
+          className="fixed inset-0 z-[55] bg-black/40 backdrop-blur-sm md:hidden"
           onClick={onClose}
         />
       )}
 
       {/* Sidebar Panel */}
       <aside
-        className={`fixed left-0 top-0 z-[80] h-full w-[320px] flex flex-col transform border-r border-orange-500/20 bg-slate-900/95 shadow-[10px_0_30px_rgba(249,115,22,0.1)] backdrop-blur-xl transition-transform duration-500 ease-in-out ${
+        className={`fixed left-0 top-0 z-[60] h-full w-[320px] flex flex-col transform border-r border-orange-500/20 bg-slate-900/95 shadow-[10px_0_30px_rgba(249,115,22,0.1)] backdrop-blur-xl transition-transform duration-500 ease-in-out ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >

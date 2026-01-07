@@ -1,21 +1,37 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/app/lib/auth";
-import { streamText } from "ai";
+import { streamText, createUIMessageStream, createUIMessageStreamResponse } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { google } from "@ai-sdk/google";
 import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
 import { db } from "@/app/lib/db";
-import { grimpoStates } from "@/app/lib/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { grimpoStates, projects } from "@/app/lib/db/schema";
+import { eq, desc, and } from "drizzle-orm";
 import { checkDeadlines } from "@/app/lib/ai/tools/checkDeadlines";
 import { getProviderAndModel } from "@/app/lib/ai/getUserPreferences";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+export const __chat_route_signature = "NO_STREAMDATA_IMPORT_v2";
 
 export async function POST(request: Request) {
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/7dbc43bc-e431-48bc-a404-d2c7ab4b2a70', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      location: 'app/api/chat/route.ts:POST',
+      message: 'chat route invoked',
+      data: { hasStreamText: typeof streamText, hasCreateUIMessageStreamResponse: typeof createUIMessageStreamResponse },
+      timestamp: Date.now(),
+      sessionId: 'debug-session',
+      runId: 'verify',
+      hypothesisId: 'H3'
+    })
+  }).catch(() => {});
+  // #endregion
   try {
     const session = await auth.api.getSession({ headers: await headers() });
     if (!session) {
@@ -27,7 +43,8 @@ export async function POST(request: Request) {
       agent = "dumbo", 
       provider: requestProvider, 
       model: requestModel,
-      userDateTime // Local time from client
+      userDateTime, // Local time from client
+      projectId // Specific sector ID
     } = body ?? {};
     const rawMessages = Array.isArray(body?.messages) ? body.messages : [];
 
@@ -139,26 +156,32 @@ export async function POST(request: Request) {
 
     // For Dumbo deadline queries, execute tool first, generate text, and return with node IDs
     if (agent === "dumbo" && shouldExecuteToolFirst && queryType) {
-      console.log(`Executing checkDeadlines tool for user ${userId}...`);
+      console.log(`Executing checkDeadlines tool for user ${userId}, project: ${projectId || 'global'}...`);
       
-      // Try to find the most recently updated graph state for this user in grimpoStates
-      // This is the table used by the main application's Server Actions
-      const states = await db
-        .select({ nodes: grimpoStates.nodes, id: grimpoStates.id })
-        .from(grimpoStates)
-        .where(eq(grimpoStates.userId, userId))
-        .orderBy(desc(grimpoStates.updatedAt))
-        .limit(1);
+      let nodes: any[] = [];
+      
+      if (projectId) {
+        // Fetch from specific project
+        const project = await db
+          .select({ nodes: projects.nodes })
+          .from(projects)
+          .where(and(eq(projects.id, projectId), eq(projects.userId, userId)))
+          .limit(1);
+        nodes = (project[0]?.nodes as any[]) || [];
+        console.log(`Found ${nodes.length} nodes in project ${projectId}`);
+      } else {
+        // Fallback to the most recently updated graph state for this user in grimpoStates
+        const states = await db
+          .select({ nodes: grimpoStates.nodes, id: grimpoStates.id })
+          .from(grimpoStates)
+          .where(eq(grimpoStates.userId, userId))
+          .orderBy(desc(grimpoStates.updatedAt))
+          .limit(1);
 
-      console.log(`Found ${states.length} potential graph states in grimpo_states table.`);
-
-      // Use the first one found (most recently updated), or default to empty
-      const nodes = (states[0]?.nodes as any[]) || [];
-      console.log(`Selected graph state ID: "${states[0]?.id || 'none'}" with ${nodes.length} nodes.`);
-      if (nodes.length > 0) {
-        console.log(`First node title sample: "${nodes[0]?.data?.title || 'no title'}"`);
+        console.log(`Found ${states.length} potential graph states in grimpo_states table.`);
+        nodes = (states[0]?.nodes as any[]) || [];
       }
-      
+
       const deadlineResults = await checkDeadlines(nodes, userDateTime);
       console.log(`checkDeadlines result:`, deadlineResults);
 
@@ -212,18 +235,21 @@ export async function POST(request: Request) {
         messages: messagesWithContext,
       });
 
-      // Get the full text
-      const fullText = await result.text;
-
-      // Return JSON with both text and highlight instructions
-      return NextResponse.json({
-        type: "complete",
-        text: fullText,
-        highlightNodes: nodeIdsToHighlight.length > 0 ? {
-          nodeIds: nodeIdsToHighlight,
-          color: highlightColor,
-          results: deadlineResults, // Include full results for color mapping
-        } : undefined,
+      return createUIMessageStreamResponse({
+        stream: createUIMessageStream({
+          execute: ({ writer }) => {
+            writer.write({
+              type: "data-highlightNodes" as any,
+              data: {
+                type: "highlightNodes",
+                nodeIds: nodeIdsToHighlight,
+                color: highlightColor,
+                results: deadlineResults,
+              },
+            });
+            writer.merge(result.toUIMessageStream());
+          },
+        }),
       });
     }
 
@@ -234,11 +260,7 @@ export async function POST(request: Request) {
       messages: normalizedMessages,
     });
 
-    const fullText = await result.text;
-    return NextResponse.json({
-      type: "complete",
-      text: fullText,
-    });
+    return result.toUIMessageStreamResponse();
   } catch (error) {
     console.error("Chat error:", error);
     const err = error as any;

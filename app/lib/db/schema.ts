@@ -18,6 +18,26 @@ export const canvases = pgTable("canvases", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Projects table (aka Sectors)
+// Multi-project workspace container for per-user isolated nodes/edges
+export const projects = pgTable(
+  "projects",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    nodes: jsonb("nodes").$type<GrimpoNode[]>().notNull().default([]),
+    edges: jsonb("edges").$type<Edge[]>().notNull().default([]),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("idx_projects_user_id").on(table.userId),
+    updatedAtIdx: index("idx_projects_updated_at").on(table.updatedAt),
+  }),
+);
+
 // Graph state table
 export const graphStates = pgTable(
   "graph_states",
@@ -207,6 +227,8 @@ export const userAiPreferences = pgTable(
 
 export type GraphState = typeof graphStates.$inferSelect;
 export type NewGraphState = typeof graphStates.$inferInsert;
+export type Project = typeof projects.$inferSelect;
+export type NewProject = typeof projects.$inferInsert;
 export type AbyssalGardenState = typeof abyssalGardenStates.$inferSelect;
 export type NewAbyssalGardenState = typeof abyssalGardenStates.$inferInsert;
 export type GrimpoState = typeof grimpoStates.$inferSelect;

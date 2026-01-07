@@ -114,3 +114,4 @@ In Surface Mode, “glowing ghosts” must translate to daylight-friendly, high-
 | Mascot | Bioluminescent Entity | Blueprint / Sketch |
 
 
+

@@ -1,860 +1,215 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, use } from "react";
-import { motion } from "framer-motion";
-import ReactFlow, {
-  Background,
-  BackgroundVariant,
-  Controls,
-  addEdge,
-  useEdgesState,
-  useNodesState,
-  ReactFlowProvider,
-  type Connection,
-  type DefaultEdgeOptions,
-  type ReactFlowInstance,
-  type Viewport,
-} from "reactflow";
-
-import type { GrimpoNodeData, ModeSetting, NodeKind } from "@/app/lib/graph";
-import { seedGraph } from "@/app/lib/graph";
-import { nodeTypes } from "@/app/nodes/nodeTypes";
-import { clearState } from "@/app/lib/storage";
-import { loadState, saveState } from "@/app/actions/canvas";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Book } from "lucide-react";
-import { DumboOctopus } from "@/app/components/DumboOctopus";
+import { motion, AnimatePresence } from "framer-motion";
+import { Plus, Folder, Trash2, Clock, Map, LogOut } from "lucide-react";
+import { getUserProjects, createProject, deleteProject } from "@/app/actions/projects";
+import { authClient } from "@/app/lib/auth-client";
 import { DumboOctopusCornerLogo } from "@/app/components/DumboOctopusCornerLogo";
-import { Mascot } from "@/app/components/Mascot";
-import { TemplateSpawner } from "@/app/components/TemplateSpawner";
-import { buildThinkingPatternTemplate, type ThinkingPattern, type ThinkingRole } from "@/app/lib/templates";
-import { AbyssalGardenPanel } from "@/app/components/AbyssalGarden/AbyssalGardenPanel";
-import { ResourceChamber } from "@/app/components/ResourceChamber";
-import { awardForTaskCompletionForTaskId } from "@/app/lib/abyssalGarden";
-import { SurfaceButton } from "@/app/components/auth/SurfaceButton";
-import { DecompressionOverlay } from "@/app/components/auth/DecompressionOverlay";
-import { FloatingControlBar } from "@/app/components/FloatingControlBar";
-import { SonarArray } from "@/app/components/SonarArray";
-import { DumbyReader } from "@/app/components/DumbyReader";
-import { AgentChat } from "@/app/components/AgentChat";
-import type { GrimpoNode } from "@/app/lib/graph";
+import { DeepSeaBackground } from "@/app/components/auth/DeepSeaBackground";
+import { toast } from "sonner";
 
-// Define these outside the component to prevent re-creation on every render
-const memoizedNodeTypes = nodeTypes;
-const memoizedEdgeTypes = {};
-
-function HomeContent() {
+export default function MissionControl() {
   const router = useRouter();
-  const seeded = seedGraph();
-  const [nodes, setNodes, onNodesChange] = useNodesState(seeded.nodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(seeded.edges);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
+  const [newProjectName, setNewProjectName] = useState("");
+  const [user, setUser] = useState<any>(null);
 
-  const [viewport, setViewport] = useState<Viewport>({ x: 0, y: 0, zoom: 1 });
-  const [modeSetting, setModeSetting] = useState<ModeSetting>("auto");
-  const [theme, setTheme] = useState<"abyss" | "surface">("abyss");
-  const [addOpen, setAddOpen] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  const [octopusInstances, setOctopusInstances] = useState<string[]>([]);
-  const [abyssalOpen, setAbyssalOpen] = useState(false);
-  const [resourceChamberOpen, setResourceChamberOpen] = useState(false);
-  const [isSurfacing, setIsSurfacing] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "auth-required">("idle");
-  const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
-  const [sonarArrayOpen, setSonarArrayOpen] = useState(false);
-  const [bathysphereNodeId, setBathysphereNodeId] = useState<string | null>(null);
-  const [highlightedNodes, setHighlightedNodes] = useState<{ nodeIds: string[]; color: string; }>({ nodeIds: [], color: '' });
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const highlightTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const wrapperRef = useRef<HTMLDivElement | null>(null);
-  const rfRef = useRef<ReactFlowInstance | null>(null);
-  const initialViewportRef = useRef<Viewport | null>(null);
-
-  const effectiveMode: Exclude<ModeSetting, "auto"> =
-    modeSetting === "auto"
-      ? (viewport.zoom < 1 ? "strategy" : "tactical")
-      : modeSetting;
-
-  // Load persisted theme and graph on first mount.
   useEffect(() => {
-    const savedTheme = localStorage.getItem("grimpo-theme") as "abyss" | "surface" | null;
-    if (savedTheme) {
-      setTheme(savedTheme);
-      document.documentElement.setAttribute("data-theme", savedTheme === "surface" ? "light" : "dark");
-    }
-
-    async function load() {
-      const saved = await loadState();
-      if (saved && (saved.nodes !== null || saved.edges !== null)) {
-        // Parse JSON and update nodes and edges state
-        if (saved.nodes) {
-          try {
-            const parsedNodes = typeof saved.nodes === "string" ? JSON.parse(saved.nodes) : saved.nodes;
-            setNodes(Array.isArray(parsedNodes) ? parsedNodes : []);
-          } catch {
-            setNodes([]);
-          }
-        }
-        if (saved.edges) {
-          try {
-            const parsedEdges = typeof saved.edges === "string" ? JSON.parse(saved.edges) : saved.edges;
-            setEdges(Array.isArray(parsedEdges) ? parsedEdges : []);
-          } catch {
-            setEdges([]);
-          }
-        }
+    async function init() {
+      const session = await authClient.getSession();
+      if (!session?.data) {
+        router.push("/login");
+        return;
       }
-      setLoaded(true);
+      setUser(session.data.user);
+
+      const userProjects = await getUserProjects();
+      setProjects(userProjects);
+      setLoading(false);
     }
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    init();
+  }, [router]);
 
-  // Debounced auto-save function
-  const handleAutoSave = useCallback(() => {
-    if (!loaded) return;
+  const handleCreateProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProjectName.trim()) return;
 
-    // Clear existing timeout
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
+    setIsCreating(true);
+    const result = await createProject(newProjectName);
+    if (result.success && result.project) {
+      toast.success(`Sector ${newProjectName} deployed!`);
+      router.push(`/project/${result.project.id}`);
+    } else {
+      toast.error("Failed to deploy sector");
+      setIsCreating(false);
     }
+  };
 
-    // Set saving status
-    setSaveStatus("saving");
-
-    // Set new timeout (1 second debounce)
-    saveTimeoutRef.current = setTimeout(async () => {
-      // Deep clone to remove internal ReactFlow properties (Symbols, functions, internals)
-      // that cannot be passed to Server Functions
-      const cleanNodes = JSON.parse(JSON.stringify(nodes));
-      const cleanEdges = JSON.parse(JSON.stringify(edges));
-
-      const result = await saveState(cleanNodes, cleanEdges);
-      
+  const handleDeleteProject = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirm("Are you sure you want to decommission this sector? All data will be lost.")) {
+      const result = await deleteProject(id);
       if (result.success) {
-        setSaveStatus("saved");
-        // Reset to idle after 2 seconds
-        setTimeout(() => setSaveStatus("idle"), 2000);
+        setProjects(projects.filter((p) => p.id !== id));
+        toast.info("Sector decommissioned");
       } else {
-        // Check if it's an authentication error
-        if (result.error?.includes("Unauthorized")) {
-          setSaveStatus("auth-required");
-          // Redirect to login page after a short delay
-          setTimeout(() => {
-            router.push("/login");
-          }, 1500);
-        } else {
-          console.error("Failed to save:", result.error);
-          setSaveStatus("idle");
-        }
-      }
-    }, 1000);
-  }, [loaded, nodes, edges]);
-
-  // Trigger auto-save on nodes or edges changes
-  useEffect(() => {
-    handleAutoSave();
-    // Cleanup timeout on unmount
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, [nodes, edges, handleAutoSave]);
-
-  // Update data-theme when theme changes
-  useEffect(() => {
-    localStorage.setItem("grimpo-theme", theme);
-    document.documentElement.setAttribute("data-theme", theme === "surface" ? "light" : "dark");
-  }, [theme]);
-
-  const onMove = useCallback((_evt: unknown, vp: Viewport) => {
-    setViewport(vp);
-  }, []);
-
-  const onConnect = useCallback(
-    (connection: Connection) => {
-      setEdges((eds) => {
-        const newEdges = addEdge({ ...connection, animated: true }, eds);
-        // Set edge color based on source node's color
-        const sourceNode = nodes.find((n) => n.id === connection.source);
-        if (sourceNode?.data.color && connection.source && connection.target) {
-          const hex = sourceNode.data.color;
-          const r = parseInt(hex.slice(1, 3), 16);
-          const g = parseInt(hex.slice(3, 5), 16);
-          const b = parseInt(hex.slice(5, 7), 16);
-          // Find the newly added edge by matching source and target
-          return newEdges.map((e) =>
-            e.source === connection.source && e.target === connection.target
-              ? {
-                  ...e,
-                  style: {
-                    ...e.style,
-                    stroke: `rgba(${r},${g},${b},0.55)`,
-                  },
-                }
-              : e,
-          );
-        }
-        return newEdges;
-      });
-    },
-    [setEdges, nodes],
-  );
-
-  const onUpdateNode = useCallback(
-    (id: string, patch: Partial<GrimpoNodeData>) => {
-      setNodes((nds) =>
-        nds.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...patch } } : n)),
-      );
-      
-      // Update edge colors when node color changes (optional enhancement)
-      if (patch.color !== undefined) {
-        setEdges((eds) =>
-          eds.map((e) => {
-            if (e.source === id) {
-              // Convert hex to rgba for edge stroke
-              const hex = patch.color || "#22d3ee"; // Default cyan
-              const r = parseInt(hex.slice(1, 3), 16);
-              const g = parseInt(hex.slice(3, 5), 16);
-              const b = parseInt(hex.slice(5, 7), 16);
-              return {
-                ...e,
-                style: {
-                  ...e.style,
-                  stroke: `rgba(${r},${g},${b},0.55)`,
-                },
-              };
-            }
-            return e;
-          }),
-        );
-      }
-    },
-    [setNodes, setEdges],
-  );
-
-  const onDeleteNode = useCallback(
-    (id: string) => {
-      setNodes((nds) => nds.filter((n) => n.id !== id));
-      setEdges((eds) => eds.filter((e) => e.source !== id && e.target !== id));
-    },
-    [setEdges, setNodes],
-  );
-
-  const onTaskDone = useCallback((nodeId: string) => {
-    // Abyssal Garden rewards (monotonic, MVP: no decrement on undo).
-    awardForTaskCompletionForTaskId(nodeId);
-
-    // Generate unique ID for this octopus instance
-    const octopusId = `octopus-${nodeId}-${Date.now()}`;
-    setOctopusInstances((prev) => [...prev, octopusId]);
-  }, []);
-
-  const onOctopusComplete = useCallback((octopusId: string) => {
-    setOctopusInstances((prev) => prev.filter((id) => id !== octopusId));
-  }, []);
-
-  // Handle node highlighting from AI agent
-  const handleHighlightNodes = useCallback((nodeIds: string[], color: string, duration: number = 8000) => {
-    // Clear any existing highlight timeout
-    if (highlightTimeoutRef.current) {
-      clearTimeout(highlightTimeoutRef.current);
-    }
-
-    // Set the new highlighted nodes
-    setHighlightedNodes({ nodeIds, color });
-
-    // Auto-clear after duration
-    highlightTimeoutRef.current = setTimeout(() => {
-      setHighlightedNodes({ nodeIds: [], color: '' });
-    }, duration);
-
-    // Optional: Pan to show highlighted nodes
-    if (nodeIds.length > 0 && rfRef.current) {
-      const highlightedNodeObjects = nodes.filter(n => nodeIds.includes(n.id));
-      if (highlightedNodeObjects.length === 1) {
-        // Zoom into single node
-        const node = highlightedNodeObjects[0];
-        rfRef.current.setCenter(node.position.x + 150, node.position.y + 100, {
-          zoom: 1.2,
-          duration: 1000,
-        });
-      } else if (highlightedNodeObjects.length > 1) {
-        // Fit view for multiple nodes
-        rfRef.current.fitView({
-          nodes: highlightedNodeObjects,
-          padding: 0.4, // More padding to see surrounding context
-          duration: 1000,
-        });
+        toast.error("Failed to decommission sector");
       }
     }
-  }, [nodes]);
+  };
 
-  // Track selected nodes from ReactFlow's internal state
-  useEffect(() => {
-    const selected = nodes.filter((n) => n.selected).map((n) => n.id);
-    setSelectedNodeIds(new Set(selected));
-  }, [nodes]);
+  const handleSignOut = async () => {
+    await authClient.signOut();
+    router.push("/login");
+  };
 
-  // Handle Bathysphere mode
-  const handleBathysphereMode = useCallback((nodeId: string, enabled: boolean) => {
-    setBathysphereNodeId(enabled ? nodeId : null);
-  }, []);
-
-  const getViewportCenterFlowPosition = useCallback(() => {
-    const rect = wrapperRef.current?.getBoundingClientRect();
-    if (rect && rfRef.current?.screenToFlowPosition) {
-      return rfRef.current.screenToFlowPosition({
-        x: rect.width / 2,
-        y: rect.height / 2,
-      });
-    }
-    return { x: 0, y: 0 };
-  }, []);
-
-  const onExtractTask = useCallback(
-    (text: string, sourceNodeId: string) => {
-      // Find the source node to position the new task nearby
-      const sourceNode = nodes.find((n) => n.id === sourceNodeId);
-      const position = sourceNode
-        ? { x: sourceNode.position.x + 400, y: sourceNode.position.y }
-        : getViewportCenterFlowPosition();
-
-      const id = `tactical-${Date.now()}`;
-      const base = { title: "", notes: "" } satisfies GrimpoNodeData;
-      const data: GrimpoNodeData = {
-        ...base,
-        title: text.slice(0, 100), // Truncate if too long
-        notes: text.length > 100 ? text : "Task extracted from resource.",
-        status: "todo",
-      };
-
-      setNodes((nds) => nds.concat({ id, type: "tactical", position, data }));
-    },
-    [getViewportCenterFlowPosition, nodes, setNodes],
-  );
-
-  // Get selected PDF nodes
-  const selectedPdfNodes = useMemo(() => {
-    return nodes.filter(
-      (n) =>
-        selectedNodeIds.has(n.id) &&
-        n.type === "resource" &&
-        n.data.pdfUrl?.trim()
-    ) as GrimpoNode[];
-  }, [nodes, selectedNodeIds]);
-
-  // Phase 3: pass zoom + callbacks down to glass nodes (ephemeral, not persisted).
-  const viewNodes = useMemo(() => {
-    return nodes.map((n) => {
-      const isHighlighted = highlightedNodes.nodeIds.includes(n.id);
-      return {
-        ...n,
-        hidden: effectiveMode === "strategy" && n.type === "tactical",
-        selected: selectedNodeIds.has(n.id),
-        className: isHighlighted ? `node-highlight node-highlight-${highlightedNodes.color}` : '',
-        data: {
-          ...n.data,
-          zoom: viewport.zoom,
-          mode: effectiveMode,
-          theme,
-          onUpdate: onUpdateNode,
-          onDelete: onDeleteNode,
-          onTaskDone: onTaskDone,
-          onBathysphereMode: handleBathysphereMode,
-          onExtractTask: onExtractTask,
-          isHighlighted,
-          highlightColor: isHighlighted ? highlightedNodes.color : null,
-        },
-      };
-    });
-  }, [effectiveMode, nodes, onDeleteNode, onTaskDone, onUpdateNode, viewport.zoom, selectedNodeIds, handleBathysphereMode, onExtractTask, highlightedNodes]);
-
-  const defaultEdgeOptions: DefaultEdgeOptions = useMemo(
-    () => ({
-      animated: theme === "abyss",
-      style: {
-        stroke: theme === "abyss" ? "rgba(34,211,238,0.55)" : "#94a3b8",
-        strokeWidth: theme === "abyss" ? 2 : 1.5,
-      },
-    }),
-    [theme],
-  );
-
-  const addNode = useCallback(
-    (kind: NodeKind) => {
-      const id = `${kind}-${Date.now()}`;
-
-      // Spawn near the center of the current viewport (hacky but good enough for MVP).
-      let position = { x: 0, y: 0 };
-      const rect = wrapperRef.current?.getBoundingClientRect();
-      if (rect && rfRef.current?.screenToFlowPosition) {
-        position = rfRef.current.screenToFlowPosition({
-          x: rect.width / 2,
-          y: rect.height / 2,
-        });
-      }
-
-      const base = { title: "", notes: "" } satisfies GrimpoNodeData;
-      const data: GrimpoNodeData =
-        kind === "strategy"
-          ? { ...base, title: "New strategy", notes: "Big picture…" }
-          : kind === "tactical"
-            ? { ...base, title: "New task", notes: "Next step…", status: "todo" }
-            : { ...base, title: "New resource", notes: "Summary…", link: "" };
-
-      setNodes((nds) => nds.concat({ id, type: kind, position, data }));
-      setAddOpen(false);
-    },
-    [setNodes],
-  );
-
-  const spawnThinkingPattern = useCallback(
-    (args: { role: ThinkingRole; pattern: Exclude<ThinkingPattern, "blank"> }) => {
-      const anchor = getViewportCenterFlowPosition();
-      const { nodes: newNodes, edges: newEdges } = buildThinkingPatternTemplate({
-        role: args.role,
-        pattern: args.pattern,
-        anchor,
-      });
-      setNodes((nds) => nds.concat(newNodes));
-      setEdges((eds) => eds.concat(newEdges));
-    },
-    [getViewportCenterFlowPosition, setEdges, setNodes],
-  );
-
-  const isBathysphereActive = bathysphereNodeId !== null;
-
-  const onScatter = useCallback(() => {
-    const selected = nodes.filter((n) => n.selected);
-    if (selected.length < 2) return;
-
-    setNodes((nds) =>
-      nds.map((n) => {
-        if (n.selected) {
-          return {
-            ...n,
-            position: {
-              x: n.position.x + (Math.random() - 0.5) * 50,
-              y: n.position.y + (Math.random() - 0.5) * 50,
-            },
-          };
-        }
-        return n;
-      }),
+  if (loading) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-slate-950 text-cyan-50">
+        <DeepSeaBackground />
+        <div className="z-10 flex flex-col items-center gap-4">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent"></div>
+          <p className="text-sm font-medium tracking-widest text-cyan-400/80">INITIALIZING MISSION CONTROL...</p>
+        </div>
+      </div>
     );
-  }, [nodes, setNodes]);
+  }
 
   return (
-    <div
-      ref={wrapperRef}
-      className={`relative h-screen w-screen transition-colors duration-500 ${
-        theme === "abyss"
-          ? "bg-gradient-to-b from-slate-950 via-slate-950 to-black"
-          : "bg-slate-50 text-slate-900"
-      }`}
-    >
-      {!isBathysphereActive && <DumboOctopusCornerLogo corner="top-left" inset={16} size={46} decorative theme={theme} />}
-
-      {isSurfacing && <DecompressionOverlay />}
-
-      {/* Dumbo Octopus Celebration Animations */}
-      {!isBathysphereActive && octopusInstances.map((octopusId) => (
-        <DumboOctopus key={octopusId} id={octopusId} onComplete={onOctopusComplete} />
-      ))}
-
-      {!isBathysphereActive && <AbyssalGardenPanel open={abyssalOpen} onClose={() => setAbyssalOpen(false)} />}
-      <ResourceChamber 
-        isOpen={resourceChamberOpen} 
-        onClose={() => setResourceChamberOpen(false)} 
-        onAddResource={(data) => {
-          const kind = "resource";
-          const id = `${kind}-${Date.now()}`;
-          const position = getViewportCenterFlowPosition();
-          const base = { title: "New Resource", notes: "", link: "" } satisfies GrimpoNodeData;
-          setNodes((nds) => nds.concat({ 
-            id, 
-            type: kind, 
-            position, 
-            data: { ...base, ...data } as GrimpoNodeData 
-          }));
-        }}
-      />
-      {!isBathysphereActive && (
-        <FloatingControlBar
-          selectedCount={selectedPdfNodes.length}
-          onCompare={() => {
-            if (selectedPdfNodes.length >= 2) {
-              setSonarArrayOpen(true);
-            }
-          }}
-        />
-      )}
-      <SonarArray
-        nodes={selectedPdfNodes}
-        isOpen={sonarArrayOpen}
-        onClose={() => {
-          setSonarArrayOpen(false);
-          setSelectedNodeIds(new Set());
-        }}
-        onHighlight={(nodeId, content, position) => {
-          // TODO: Implement shared intelligence for cross-document highlighting
-          console.log("Highlight from", nodeId, ":", content);
-        }}
-      />
-      {/* Bathysphere Mode Overlay */}
-      {bathysphereNodeId && (() => {
-        const node = nodes.find((n) => n.id === bathysphereNodeId);
-        if (!node || !node.data.pdfUrl?.trim()) return null;
-        
-        // Get node screen position for smooth animation
-        let nodePosition: { x: number; y: number } | undefined;
-        if (rfRef.current) {
-          try {
-            const flowPosition = rfRef.current.getNode(node.id)?.position;
-            if (flowPosition) {
-              const screenPos = rfRef.current.flowToScreenPosition(flowPosition);
-              nodePosition = { x: screenPos.x, y: screenPos.y };
-            }
-          } catch (e) {
-            // Fallback if position can't be determined
-            console.warn("Could not get node position for animation:", e);
-          }
-        }
-        
-        return (
-          <DumbyReader
-            pdfUrl={node.data.pdfUrl}
-            nodeId={node.id}
-            nodeTitle={node.data.title}
-            viewMode="bathysphere"
-            nodePosition={nodePosition}
-            onViewModeChange={(mode) => {
-              if (mode === "inline") {
-                setBathysphereNodeId(null);
-              }
-            }}
-          />
-        );
-      })()}
-
-      {!isBathysphereActive && (
-        <>
-          <ReactFlow
-            nodes={viewNodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            nodeTypes={memoizedNodeTypes}
-            edgeTypes={memoizedEdgeTypes}
-            defaultEdgeOptions={defaultEdgeOptions}
-            onMove={onMove}
-            onInit={(instance) => {
-              rfRef.current = instance;
-              if (initialViewportRef.current) {
-                instance.setViewport(initialViewportRef.current, { duration: 0 });
-                setViewport(initialViewportRef.current);
-                initialViewportRef.current = null;
-              }
-            }}
-            fitView
-            proOptions={{ hideAttribution: true }}
-            multiSelectionKeyCode="Shift"
-          >
-            <Background 
-              gap={32} 
-              variant={theme === "surface" ? BackgroundVariant.Lines : BackgroundVariant.Dots}
-              color={theme === "abyss" ? "rgba(255,255,255,0.04)" : "#e2e8f0"} 
-            />
-            <Controls position="bottom-left" style={{ bottom: 140 }} />
-          </ReactFlow>
-
-          <TemplateSpawner onSpawnPattern={spawnThinkingPattern} />
-        </>
-      )}
-
-      {/* Mode and Theme toggle overlay */}
-      {!isBathysphereActive && !sonarArrayOpen && (
-      <div className="pointer-events-none absolute right-4 top-4 z-50 flex flex-col items-end gap-2">
-        <div className="pointer-events-auto flex items-center gap-3">
-          {/* Theme Toggle */}
-          <div className={`flex items-center rounded-full border p-1 backdrop-blur-md transition-all duration-300 ${
-            theme === 'surface' 
-              ? 'border-slate-300 bg-white/80 shadow-md' 
-              : 'border-cyan-300/20 bg-slate-950/40 shadow-[0_0_18px_rgba(34,211,238,0.18)]'
-          }`}>
-            {(["abyss", "surface"] as const).map((t) => {
-              const active = theme === t;
-              return (
-                <button
-                  key={t}
-                  onClick={() => setTheme(t)}
-                  className={[
-                    "rounded-full px-3 py-1 text-xs tracking-wide transition-all duration-300",
-                    active
-                      ? theme === 'surface'
-                        ? "bg-slate-900 text-white shadow-sm"
-                        : "bg-cyan-400/20 text-cyan-50 shadow-[0_0_14px_rgba(34,211,238,0.25)]"
-                      : theme === 'surface'
-                        ? "text-slate-500 hover:text-slate-900"
-                        : "text-cyan-100/70 hover:text-cyan-50",
-                  ].join(" ")}
-                  title={`Theme: ${t}`}
-                >
-                  {t.toUpperCase()}
-                </button>
-              );
-            })}
+    <div className="relative min-h-screen w-screen overflow-x-hidden bg-slate-950 text-slate-200">
+      <DeepSeaBackground />
+      
+      {/* Header */}
+      <header className="relative z-10 flex items-center justify-between px-8 py-6">
+        <div className="flex items-center gap-4">
+          <DumboOctopusCornerLogo size={40} decorative />
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-cyan-50">Mission Control</h1>
+            <p className="text-xs text-cyan-400/60 uppercase tracking-widest">Deep Sea Research Laboratory</p>
           </div>
+        </div>
 
-          {/* Mode Toggle */}
-          <div className={`flex items-center rounded-full border p-1 backdrop-blur-md transition-all duration-300 ${
-            theme === 'surface' 
-              ? 'border-slate-300 bg-white/80 shadow-md' 
-              : 'border-cyan-300/20 bg-slate-950/40 shadow-[0_0_18px_rgba(34,211,238,0.18)]'
-          }`}>
-            {(["auto", "strategy", "tactical"] as const).map((m) => {
-              const active = modeSetting === m;
-              return (
-                <button
-                  key={m}
-                  onClick={() => setModeSetting(m)}
-                  className={[
-                    "rounded-full px-3 py-1 text-xs tracking-wide transition-all duration-300",
-                    active
-                      ? theme === 'surface'
-                        ? "bg-slate-900 text-white shadow-sm"
-                        : "bg-cyan-400/20 text-cyan-50 shadow-[0_0_14px_rgba(34,211,238,0.25)]"
-                      : theme === 'surface'
-                        ? "text-slate-500 hover:text-slate-900"
-                        : "text-cyan-100/70 hover:text-cyan-50",
-                  ].join(" ")}
-                  title={`Mode: ${m}`}
-                >
-                  {m.toUpperCase()}
-                </button>
-              );
-            })}
+        <div className="flex items-center gap-4">
+          <div className="flex flex-col items-end mr-2">
+            <span className="text-sm font-medium text-slate-300">{user?.name}</span>
+            <span className="text-[10px] text-slate-500 uppercase tracking-tighter">{user?.email}</span>
           </div>
-
           <button
-            onClick={() => setAbyssalOpen(true)}
-            className={`rounded-full border px-3 py-1 text-xs tracking-wide backdrop-blur-md transition-all duration-300 ${
-              theme === 'surface'
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700 shadow-sm hover:bg-emerald-100"
-                : "border-emerald-300/15 bg-emerald-500/10 text-emerald-50 shadow-[0_0_18px_rgba(16,185,129,0.18)] hover:bg-emerald-500/15"
-            }`}
-            title="Open Abyssal Garden"
+            onClick={handleSignOut}
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-800 bg-slate-900/50 text-slate-400 hover:bg-slate-800 hover:text-white transition-all"
+            title="Surface (Sign Out)"
           >
-            GARDEN
+            <LogOut size={18} />
           </button>
         </div>
-        <div className={`pointer-events-none text-xs transition-colors duration-300 ${
-          theme === 'surface' ? 'text-slate-500' : 'text-cyan-100/60'
-        }`}>
-          Zoom: {viewport.zoom.toFixed(2)} • Showing: {effectiveMode.toUpperCase()}
-        </div>
-      </div>
-      )}
+      </header>
 
-      {/* Add Node FAB */}
-      {!isBathysphereActive && (
-      <div className="pointer-events-none absolute bottom-5 right-5 z-50">
-        <div className="pointer-events-auto relative">
-          {addOpen ? (
-            <div className={`mb-3 flex flex-col gap-2 rounded-3xl border p-2 backdrop-blur-md transition-all duration-300 ${
-              theme === 'surface'
-                ? 'border-slate-300 bg-white/90 shadow-xl'
-                : 'border-rose-300/20 bg-slate-950/50 shadow-[0_0_24px_rgba(244,63,94,0.22)]'
-            }`}>
-              <button
-                className={`rounded-2xl px-4 py-2 text-left text-sm transition-colors ${
-                  theme === 'surface' ? 'text-slate-700 hover:bg-slate-100' : 'text-rose-100 hover:bg-white/5'
-                }`}
-                onClick={() => addNode("strategy")}
-              >
-                + Strategy node
-              </button>
-              <button
-                className={`rounded-2xl px-4 py-2 text-left text-sm transition-colors ${
-                  theme === 'surface' ? 'text-slate-700 hover:bg-slate-100' : 'text-rose-100 hover:bg-white/5'
-                }`}
-                onClick={() => addNode("tactical")}
-              >
-                + Tactical node
-              </button>
-              <button
-                className={`rounded-2xl px-4 py-2 text-left text-sm transition-colors ${
-                  theme === 'surface' ? 'text-slate-700 hover:bg-slate-100' : 'text-rose-100 hover:bg-white/5'
-                }`}
-                onClick={() => addNode("resource")}
-              >
-                + Resource node
-              </button>
+      <main className="relative z-10 mx-auto max-w-6xl px-8 py-12">
+        <div className="mb-12 flex flex-col gap-2">
+          <h2 className="text-3xl font-light text-white">Your Research Sectors</h2>
+          <p className="text-slate-400">Select a sector to continue your mission or deploy a new one.</p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {/* Create New Project Card */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="group relative flex flex-col justify-between overflow-hidden rounded-3xl border border-dashed border-cyan-500/30 bg-cyan-500/5 p-8 transition-all hover:border-cyan-500/60 hover:bg-cyan-500/10"
+          >
+            <div>
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/20 text-cyan-400">
+                <Plus size={24} />
+              </div>
+              <h3 className="mb-2 text-xl font-medium text-white">Deploy New Sector</h3>
+              <p className="text-sm text-slate-400">Initialize a new isolated research workspace.</p>
             </div>
-          ) : null}
 
-          <button
-            onClick={() => setAddOpen((v) => !v)}
-            className={`grid h-14 w-14 place-items-center rounded-full border backdrop-blur-md transition-all hover:scale-[1.03] ${
-              theme === 'surface'
-                ? 'border-slate-300 bg-slate-900 text-white shadow-lg hover:bg-slate-800'
-                : 'border-rose-300/25 bg-rose-500/20 text-rose-50 shadow-[0_0_26px_rgba(244,63,94,0.35)]'
-            }`}
-            title="Add node"
-          >
-            <span className="text-2xl leading-none">+</span>
-          </button>
-        </div>
-      </div>
-      )}
-
-      {/* Reset */}
-      {!isBathysphereActive && (
-      <div className="pointer-events-none absolute bottom-5 right-24 z-50">
-        <button
-          className={`pointer-events-auto rounded-full border px-4 py-2 text-xs backdrop-blur-md transition-all duration-300 disabled:opacity-50 ${
-            theme === 'surface'
-              ? 'border-slate-300 bg-white/80 text-slate-600 hover:bg-slate-100 hover:text-slate-900 shadow-sm'
-              : 'border-cyan-300/20 bg-slate-950/40 text-cyan-50 hover:bg-slate-950/55'
-          }`}
-          onClick={async () => {
-            await clearState();
-            // Reset to a blank canvas.
-            setNodes([]);
-            setEdges([]);
-            setModeSetting("auto");
-            const resetVp: Viewport = { x: 0, y: 0, zoom: 1 };
-            setViewport(resetVp);
-            rfRef.current?.setViewport(resetVp, { duration: 0 });
-          }}
-          disabled={isSurfacing}
-          title="Clear local save and reset to a blank canvas"
-        >
-          Reset
-        </button>
-      </div>
-      )}
-
-      {/* Surface Button - Positioned under the top-left logo */}
-      {!isBathysphereActive && (
-      <div className="pointer-events-none absolute top-[72px] left-[16px] z-50 flex flex-col gap-3">
-        <div className="pointer-events-auto">
-          <SurfaceButton 
-            onSurface={() => setIsSurfacing(true)} 
-            disabled={isSurfacing} 
-            theme={theme}
-          />
-        </div>
-        <div className="pointer-events-auto">
-          <button
-            onClick={() => setResourceChamberOpen(true)}
-            className={`group flex h-12 w-12 items-center justify-center rounded-2xl border backdrop-blur-md transition-all duration-300 ${
-              theme === 'surface'
-                ? 'border-slate-300 bg-white/80 text-slate-700 shadow-md hover:bg-slate-50 hover:shadow-lg'
-                : 'border-orange-500/30 bg-slate-950/40 text-orange-400 hover:bg-orange-500/10 hover:shadow-[0_0_20px_rgba(249,115,22,0.2)]'
-            }`}
-            title="Open The Resource Chamber"
-          >
-            <Book className="h-6 w-6 transition-transform group-hover:scale-110" />
-          </button>
-        </div>
-      </div>
-      )}
-
-      {/* Mascot variants (draggable) */}
-      {!isBathysphereActive && (
-      <motion.div 
-        drag 
-        dragMomentum={false}
-        dragConstraints={wrapperRef}
-        className="pointer-events-none absolute bottom-5 left-5 z-50"
-      >
-        <div className={`pointer-events-auto rounded-3xl border p-3 backdrop-blur-md transition-all duration-300 cursor-grab active:cursor-grabbing ${
-          theme === 'surface'
-            ? 'border-slate-300 bg-white/80 shadow-lg'
-            : 'border-cyan-300/15 bg-slate-950/35 shadow-[0_0_18px_rgba(34,211,238,0.16)]'
-        }`}>
-          <div className={`mb-2 text-[11px] tracking-widest ${theme === 'surface' ? 'text-slate-400' : 'text-cyan-100/70'}`}>MASCOTS</div>
-          <div className="flex items-center gap-3">
-            <div className="flex flex-col items-center gap-1">
-              <Mascot
-                variant="dumbo"
-                size={44}
-                className={theme === 'surface' ? "" : "drop-shadow-[0_0_10px_rgba(250,204,21,0.12)]"}
-                showOxygenTank={true}
-                theme={theme}
+            <form onSubmit={handleCreateProject} className="mt-8 flex flex-col gap-3">
+              <input
+                type="text"
+                placeholder="Sector Name (e.g. Mariana Trench)"
+                value={newProjectName}
+                onChange={(e) => setNewProjectName(e.target.value)}
+                className="w-full rounded-xl border border-slate-800 bg-slate-900/50 px-4 py-2.5 text-sm text-white placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none"
               />
-              <div className={`text-[10px] ${theme === 'surface' ? 'text-slate-500' : 'text-cyan-50/70'}`}>Intern</div>
-            </div>
-            <div className="flex flex-col items-center gap-1">
-              <Mascot 
-                variant="dumby" 
-                size={44} 
-                className={theme === 'surface' ? "" : "drop-shadow-[0_0_10px_rgba(251,146,60,0.12)]"} 
-                theme={theme}
-              />
-              <div className={`text-[10px] ${theme === 'surface' ? 'text-slate-500' : 'text-cyan-50/70'}`}>Manager</div>
-              {theme === "surface" && selectedNodeIds.size >= 2 && (
-                <button
-                  onPointerDown={(e) => e.stopPropagation()} // Prevent drag when clicking button
-                  onClick={onScatter}
-                  className="mt-1 rounded-md bg-slate-900 px-2 py-0.5 text-[9px] font-bold text-white shadow-sm hover:bg-slate-700 transition-colors"
-                  title="Scatter selected nodes"
-                >
-                  SCATTER
-                </button>
-              )}
-            </div>
-            <div className="flex flex-col items-center gap-1">
-              <Mascot variant="grimpy" size={44} theme={theme} />
-              <div className={`text-[10px] ${theme === 'surface' ? 'text-slate-500' : 'text-cyan-50/70'}`}>Architect</div>
-            </div>
-          </div>
-        </div>
-      </motion.div>
-      )}
-
-      {/* Save status indicator */}
-      {!isBathysphereActive && saveStatus !== "idle" && (
-        <div className="pointer-events-none absolute bottom-5 left-[200px] z-50">
-          {saveStatus === "auth-required" ? (
-            <div className="pointer-events-auto rounded-full border border-amber-300/30 bg-amber-500/20 px-4 py-2 text-[11px] text-amber-100 backdrop-blur-md shadow-[0_0_18px_rgba(245,158,11,0.18)]">
-              <span className="mr-2">Sign in required to save</span>
               <button
-                onClick={() => router.push("/login")}
-                className="underline hover:text-amber-50"
+                type="submit"
+                disabled={isCreating || !newProjectName.trim()}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-cyan-500 disabled:opacity-50"
               >
-                Go to Login →
+                {isCreating ? "Deploying..." : "Initialize Sector"}
               </button>
-            </div>
-          ) : (
-            <div className="pointer-events-auto rounded-full border border-cyan-300/20 bg-slate-950/60 px-3 py-1.5 text-[10px] text-cyan-100/80 backdrop-blur-md">
-              {saveStatus === "saving" ? "Saving..." : "Saved to Neon"}
-            </div>
-          )}
-        </div>
-      )}
+            </form>
+          </motion.div>
 
-      <AgentChat onHighlightNodes={handleHighlightNodes} theme={theme} />
+          {/* Project Cards */}
+          <AnimatePresence>
+            {projects.map((project, index) => (
+              <motion.div
+                key={project.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.05 }}
+                onClick={() => router.push(`/project/${project.id}`)}
+                className="group relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/40 p-8 transition-all hover:border-cyan-500/40 hover:bg-slate-900/60 hover:shadow-[0_0_30px_rgba(34,211,238,0.1)]"
+              >
+                <div className="absolute -right-4 -top-4 h-24 w-24 rounded-full bg-cyan-500/5 blur-3xl transition-all group-hover:bg-cyan-500/10"></div>
+                
+                <div className="relative">
+                  <div className="mb-6 flex items-center justify-between">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-800 text-cyan-400 group-hover:bg-cyan-500/20 group-hover:text-cyan-300 transition-colors">
+                      <Map size={24} />
+                    </div>
+                    <button
+                      onClick={(e) => handleDeleteProject(project.id, e)}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-600 hover:bg-rose-500/20 hover:text-rose-400 transition-all opacity-0 group-hover:opacity-100"
+                      title="Decommission Sector"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                  
+                  <h3 className="mb-2 text-xl font-medium text-white group-hover:text-cyan-100 transition-colors">
+                    {project.name}
+                  </h3>
+                  {project.description && (
+                    <p className="text-sm text-slate-500 line-clamp-2">{project.description}</p>
+                  )}
+                </div>
+
+                <div className="mt-8 flex items-center justify-between border-t border-slate-800 pt-4">
+                  <div className="flex items-center gap-2 text-[10px] text-slate-500 uppercase tracking-widest">
+                    <Clock size={10} />
+                    <span>Updated {new Date(project.updatedAt).toLocaleDateString()}</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-[10px] font-bold text-cyan-500 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0">
+                    ENTER SECTOR
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+        
+        {projects.length === 0 && !loading && (
+          <div className="mt-12 flex flex-col items-center justify-center rounded-3xl border border-slate-800/50 bg-slate-900/20 py-24 text-center">
+            <div className="mb-4 text-slate-600">
+              <Folder size={64} strokeWidth={1} />
+            </div>
+            <h3 className="text-xl font-medium text-slate-400">No active sectors found</h3>
+            <p className="mt-2 text-slate-500">Deploy your first research mission to begin.</p>
+          </div>
+        )}
+      </main>
+
+      <footer className="relative z-10 mt-auto py-8 text-center text-[10px] uppercase tracking-widest text-slate-600">
+        &copy; {new Date().getFullYear()} Grimpo Deep Sea Research Framework • All Rights Reserved
+      </footer>
     </div>
-  );
-}
-
-export default function Home(props: {
-  params: Promise<any>;
-  searchParams: Promise<any>;
-}) {
-  // Explicitly unwrap promises to avoid Next.js 15+ synchronous access errors
-  // when props are enumerated by dev tools/extensions.
-  use(props.params);
-  use(props.searchParams);
-
-  return (
-    <ReactFlowProvider>
-      <HomeContent />
-    </ReactFlowProvider>
   );
 }

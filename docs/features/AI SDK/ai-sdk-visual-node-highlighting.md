@@ -148,3 +148,4 @@ The `/api/chat` endpoint must return not just text, but also:
 - Persistent "pin" mode: Keep highlights until user manually clears
 - Highlight grouping: Show connected tasks as a cluster
 
+

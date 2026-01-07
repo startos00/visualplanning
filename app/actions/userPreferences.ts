@@ -37,6 +37,31 @@ export async function getUserAiPreferences() {
 
     return { preferences: result };
   } catch (error) {
+    // Gracefully handle missing table in dev/new environments.
+    // Neon/Postgres uses SQLSTATE 42P01 for "undefined_table".
+    const code = (error as any)?.code;
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/7dbc43bc-e431-48bc-a404-d2c7ab4b2a70', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        location: 'app/actions/userPreferences.ts:39',
+        message: 'getUserAiPreferences failed',
+        data: { code, name: (error as any)?.name },
+        timestamp: Date.now(),
+        sessionId: 'debug-session',
+        runId: 'verify',
+        hypothesisId: 'H1'
+      })
+    }).catch(() => {});
+    // #endregion
+    if (code === "42P01") {
+      const empty: Record<AgentType, { provider: Provider; model: string } | null> = {
+        dumbo: null,
+        dumby: null,
+      };
+      return { preferences: empty };
+    }
     console.error("Error fetching user AI preferences:", error);
     return { error: "Failed to fetch preferences" };
   }

@@ -8,27 +8,27 @@ import { Mascot, MascotVariant } from "./Mascot";
 import { AiProviderSelector } from "./ui/AiProviderSelector";
 import type { AgentType, Provider } from "@/app/lib/ai/aiConstants";
 import { DEFAULT_MODELS } from "@/app/lib/ai/aiConstants";
-
-type Message = {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-};
+import { useChat } from "@ai-sdk/react";
 
 type AgentChatProps = {
-  initialAgent?: MascotVariant;
-  onHighlightNodes?: (nodeIds: string[], color: string, duration?: number) => void;
+  chat: {
+    messages: any[];
+    input: string;
+    setInput: (input: string) => void;
+    handleSubmit: (e: React.FormEvent<HTMLFormElement>, options?: any) => void;
+    append: (message: { role: "user" | "assistant" | "system"; content: string }) => Promise<string | null | undefined>;
+    isLoading: boolean;
+  };
+  agent: MascotVariant;
+  onAgentChange: (agent: MascotVariant) => void;
   theme?: "abyss" | "surface";
 };
 
-export function AgentChat({ initialAgent = "dumbo", onHighlightNodes, theme = "abyss" }: AgentChatProps) {
+export function AgentChat({ chat, agent, onAgentChange, theme = "abyss" }: AgentChatProps) {
+  const { messages, input, setInput, handleSubmit, append, isLoading } = chat;
   const [isOpen, setIsOpen] = useState(false);
   const isSurface = theme === "surface";
-  const [agent, setAgent] = useState<MascotVariant>(initialAgent);
   const [isMinimized, setIsMinimized] = useState(false);
-  const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentProvider, setCurrentProvider] = useState<Provider>("google");
   const [currentModel, setCurrentModel] = useState<string>(DEFAULT_MODELS.google);
@@ -106,87 +106,9 @@ export function AgentChat({ initialAgent = "dumbo", onHighlightNodes, theme = "a
     }
   };
 
-  const sendMessage = useCallback(
-    async (userMessage: string) => {
-      if (!userMessage.trim()) return;
-
-      // Add user message
-      const userMsg: Message = {
-        id: `user-${Date.now()}`,
-        role: "user",
-        content: userMessage,
-      };
-      setMessages((prev) => [...prev, userMsg]);
-      setInput("");
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const response = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            agent,
-            userDateTime: new Date().toISOString(), // Pass local time to handle timezones
-            messages: [...messages, userMsg].map((m) => ({
-              role: m.role,
-              content: m.content,
-            })),
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        const data = await response.json();
-
-        if (data.error) {
-          throw new Error(data.error);
-        }
-
-        // Add assistant message
-        const assistantMsg: Message = {
-          id: `assistant-${Date.now()}`,
-          role: "assistant",
-          content: data.text || "I'm here to help! 🐙",
-        };
-        setMessages((prev) => [...prev, assistantMsg]);
-
-        // Trigger node highlighting if provided
-        if (data.highlightNodes && onHighlightNodes) {
-          const { nodeIds, color, results } = data.highlightNodes;
-          
-          // Map colors based on urgency
-          let finalColor = color;
-          if (color === "multi" && results) {
-            // For "scan all", we'll highlight overdue in red, today in yellow, upcoming in blue
-            // But for simplicity, let's use cyan to indicate "mixed urgency"
-            finalColor = "cyan";
-          }
-          
-          onHighlightNodes(nodeIds, finalColor, 10000); // 10 seconds
-        }
-      } catch (err: any) {
-        console.error("Chat error:", err);
-        setError(err.message || "Failed to send message");
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [agent, messages, onHighlightNodes],
-  );
-
-  const handleSubmit = useCallback(
-    (e: React.FormEvent, commandText?: string) => {
-      e.preventDefault();
-      const text = commandText || input.trim();
-      if (text) {
-        sendMessage(text);
-      }
-    },
-    [input, sendMessage],
-  );
+  const handleQuickCommand = (text: string) => {
+    append({ role: "user", content: text });
+  };
 
   const quickCommands = [
     { label: "Scan Deadlines", icon: Search, text: "scan deadlines" },
@@ -218,7 +140,7 @@ export function AgentChat({ initialAgent = "dumbo", onHighlightNodes, theme = "a
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className={`fixed bottom-[84px] right-6 z-[100] flex h-14 w-14 items-center justify-center rounded-full border backdrop-blur-md transition-all hover:scale-110 ${
+        className={`fixed bottom-[84px] right-6 z-[50] flex h-14 w-14 items-center justify-center rounded-full border backdrop-blur-md transition-all hover:scale-110 ${
           isSurface
             ? "border-slate-300 bg-white text-slate-700 shadow-lg hover:bg-slate-50"
             : "border-cyan-400/30 bg-slate-950/80 text-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.3)] hover:border-cyan-400/50"
@@ -233,7 +155,7 @@ export function AgentChat({ initialAgent = "dumbo", onHighlightNodes, theme = "a
     <motion.div
       drag
       dragMomentum={false}
-      className={`fixed bottom-6 right-6 z-[100] flex flex-col overflow-hidden rounded-3xl border transition-all duration-300 nopan nowheel nodrag ${
+      className={`fixed bottom-6 right-6 z-[50] flex flex-col overflow-hidden rounded-3xl border transition-all duration-300 nopan nowheel nodrag ${
         agentColors[agent]
       } ${isMinimized ? "h-14 w-64" : "h-[600px] w-80 md:w-96"}`}
     >
@@ -278,7 +200,7 @@ export function AgentChat({ initialAgent = "dumbo", onHighlightNodes, theme = "a
             {(["dumbo", "dumby", "grimpy"] as MascotVariant[]).map((v) => (
               <button
                 key={v}
-                onClick={() => setAgent(v)}
+                onClick={() => onAgentChange(v)}
                 onPointerDown={(e) => e.stopPropagation()}
                 className={`flex-1 rounded-xl py-1 text-[10px] font-bold uppercase tracking-wider transition-all ${
                   agent === v 
@@ -355,7 +277,7 @@ export function AgentChat({ initialAgent = "dumbo", onHighlightNodes, theme = "a
               {quickCommands.map((cmd) => (
                 <button
                   key={cmd.label}
-                  onClick={(e) => handleSubmit(e, cmd.text)}
+                  onClick={(e) => handleQuickCommand(cmd.text)}
                   disabled={isLoading}
                   className={`flex items-center gap-1.5 rounded-full border-2 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-all hover:scale-105 active:scale-95 disabled:opacity-50 ${
                     isSurface

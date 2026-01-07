@@ -18,6 +18,19 @@ CREATE TABLE IF NOT EXISTS grimpo_states (
   updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+-- Projects table (aka Sectors)
+-- Multi-project workspace container for per-user isolated nodes/edges
+CREATE TABLE IF NOT EXISTS projects (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  nodes JSONB NOT NULL DEFAULT '[]'::jsonb,
+  edges JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 -- Migration: If you have an existing grimpo_states table with user_key column,
 -- run this migration SQL to update it:
 -- ALTER TABLE grimpo_states RENAME COLUMN user_key TO user_id;
@@ -124,6 +137,8 @@ CREATE INDEX IF NOT EXISTS idx_verification_tokens_identifier ON verification_to
 CREATE INDEX IF NOT EXISTS idx_verification_tokens_token ON verification_tokens(token);
 CREATE INDEX IF NOT EXISTS idx_verification_tokens_expires_at ON verification_tokens(expires_at);
 CREATE INDEX IF NOT EXISTS idx_grimpo_states_user_id ON grimpo_states(user_id);
+CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id);
+CREATE INDEX IF NOT EXISTS idx_projects_updated_at ON projects(updated_at);
 CREATE INDEX IF NOT EXISTS idx_pdf_summaries_user_id ON pdf_summaries(user_id);
 
 -- Bookshelves table (must be created before highlights due to foreign key)
