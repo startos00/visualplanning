@@ -38,12 +38,154 @@ import { SonarArray } from "@/app/components/SonarArray";
 import { DumbyReader } from "@/app/components/DumbyReader";
 import { AgentChat } from "@/app/components/AgentChat";
 import { MascotAgentPanel } from "@/app/components/MascotAgentPanel";
+import { CreationDock } from "@/app/components/CreationDock";
 import type { GrimpoNode } from "@/app/lib/graph";
 import { useChat } from "@ai-sdk/react";
 
 // Define these outside the component to prevent re-creation on every render
 const memoizedNodeTypes = nodeTypes;
 const memoizedEdgeTypes = {};
+
+function DrawingOverlay({
+  active,
+  theme,
+  wrapperRef,
+  canvasRef,
+  onHasInk,
+}: {
+  active: boolean;
+  theme: "abyss" | "surface";
+  wrapperRef: React.RefObject<HTMLDivElement | null>;
+  canvasRef: React.RefObject<HTMLCanvasElement | null>;
+  onHasInk: () => void;
+}) {
+  const drawingRef = useRef(false);
+  const lastRef = useRef<{ x: number; y: number } | null>(null);
+  const rafRef = useRef<number | null>(null);
+
+  const resizeToWrapper = useCallback(() => {
+    const canvas = canvasRef.current;
+    const wrapper = wrapperRef.current;
+    if (!canvas || !wrapper) return;
+    const rect = wrapper.getBoundingClientRect();
+
+    const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+    const width = Math.max(1, Math.floor(rect.width));
+    const height = Math.max(1, Math.floor(rect.height));
+
+    // Keep existing pixels if possible
+    const prev = document.createElement("canvas");
+    prev.width = canvas.width;
+    prev.height = canvas.height;
+    const prevCtx = prev.getContext("2d");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    if (prevCtx) prevCtx.drawImage(canvas, 0, 0);
+
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    canvas.width = Math.floor(width * dpr);
+    canvas.height = Math.floor(height * dpr);
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = theme === "surface" ? 3 : 3.5;
+    ctx.strokeStyle = theme === "surface" ? "rgba(14,116,144,0.9)" : "rgba(34,211,238,0.9)";
+
+    // Restore previous bitmap (scaled into new canvas)
+    if (prev.width > 0 && prev.height > 0) {
+      ctx.drawImage(prev, 0, 0, prev.width / dpr, prev.height / dpr);
+    }
+  }, [canvasRef, theme, wrapperRef]);
+
+  useEffect(() => {
+    resizeToWrapper();
+    if (!active) return;
+
+    const handle = () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => resizeToWrapper());
+    };
+    window.addEventListener("resize", handle);
+    return () => {
+      window.removeEventListener("resize", handle);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    };
+  }, [active, resizeToWrapper]);
+
+  useEffect(() => {
+    // Reapply stroke style if theme changes
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!ctx) return;
+    ctx.strokeStyle = theme === "surface" ? "rgba(14,116,144,0.9)" : "rgba(34,211,238,0.9)";
+  }, [canvasRef, theme]);
+
+  const toLocalPoint = useCallback(
+    (evt: React.PointerEvent<HTMLCanvasElement>) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return null;
+      const rect = canvas.getBoundingClientRect();
+      return { x: evt.clientX - rect.left, y: evt.clientY - rect.top };
+    },
+    [canvasRef],
+  );
+
+  const drawLine = useCallback(
+    (from: { x: number; y: number }, to: { x: number; y: number }) => {
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext("2d");
+      if (!ctx) return;
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(to.x, to.y);
+      ctx.stroke();
+      onHasInk();
+    },
+    [canvasRef, onHasInk],
+  );
+
+  if (!active) {
+    return (
+      <canvas
+        ref={canvasRef}
+        className="pointer-events-none absolute inset-0 z-40"
+      />
+    );
+  }
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="pointer-events-auto absolute inset-0 z-40 cursor-crosshair touch-none"
+      onPointerDown={(evt) => {
+        drawingRef.current = true;
+        (evt.currentTarget as HTMLCanvasElement).setPointerCapture(evt.pointerId);
+        const p = toLocalPoint(evt);
+        lastRef.current = p;
+      }}
+      onPointerMove={(evt) => {
+        if (!drawingRef.current) return;
+        const p = toLocalPoint(evt);
+        const last = lastRef.current;
+        if (!p || !last) return;
+        drawLine(last, p);
+        lastRef.current = p;
+      }}
+      onPointerUp={(evt) => {
+        drawingRef.current = false;
+        (evt.currentTarget as HTMLCanvasElement).releasePointerCapture(evt.pointerId);
+        lastRef.current = null;
+      }}
+      onPointerCancel={() => {
+        drawingRef.current = false;
+        lastRef.current = null;
+      }}
+    />
+  );
+}
 
 function ProjectContent({ id }: { id: string }) {
   const router = useRouter();
@@ -53,11 +195,12 @@ function ProjectContent({ id }: { id: string }) {
   const [allProjects, setAllProjects] = useState<any[]>([]);
   const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
   const switcherRef = useRef<HTMLDivElement>(null);
+  const [loadError, setLoadError] = useState<{ message: string; debug?: any } | null>(null);
+  const [reloadNonce, setReloadNonce] = useState(0);
 
   const [viewport, setViewport] = useState<Viewport>({ x: 0, y: 0, zoom: 1 });
   const [modeSetting, setModeSetting] = useState<ModeSetting>("auto");
   const [theme, setTheme] = useState<"abyss" | "surface">("abyss");
-  const [addOpen, setAddOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [octopusInstances, setOctopusInstances] = useState<string[]>([]);
   const [abyssalOpen, setAbyssalOpen] = useState(false);
@@ -70,6 +213,9 @@ function ProjectContent({ id }: { id: string }) {
   const [highlightedNodes, setHighlightedNodes] = useState<{ nodeIds: string[]; color: string; }>({ nodeIds: [], color: '' });
   const [currentAgent, setCurrentAgent] = useState<MascotVariant>("dumbo");
   const [activeMascot, setActiveMascot] = useState<MascotVariant | null>(null);
+  const [isDrawingMode, setIsDrawingMode] = useState(false);
+  const sketchCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const hasSketchRef = useRef(false);
 
   useEffect(() => {
     // #region agent log
@@ -165,6 +311,7 @@ function ProjectContent({ id }: { id: string }) {
     }
 
     async function load() {
+      setLoadError(null);
       // Parallel fetch project data and all projects for the switcher
       const [result, projectsList] = await Promise.all([
         getProjectData(id),
@@ -174,11 +321,14 @@ function ProjectContent({ id }: { id: string }) {
       setAllProjects(projectsList);
 
       if (result.error) {
-        console.error("Failed to load project:", result.error);
+        console.error("Failed to load project:", result.error, (result as any)?.debug ?? null);
         if (result.error === "Unauthorized") {
           router.push("/login");
-        } else {
+        } else if (result.error === "Project not found") {
           router.push("/");
+        } else {
+          // Transient backend failures (auth/db/network) should not kick the user out.
+          setLoadError({ message: result.error, debug: (result as any).debug });
         }
         return;
       }
@@ -201,7 +351,7 @@ function ProjectContent({ id }: { id: string }) {
       setLoaded(true);
     }
     load();
-  }, [id, router, setNodes, setEdges]);
+  }, [id, router, setNodes, setEdges, reloadNonce]);
 
   // Click outside switcher handler
   useEffect(() => {
@@ -468,10 +618,40 @@ function ProjectContent({ id }: { id: string }) {
             : { ...base, title: "New resource", notes: "Summary…", link: "" };
 
       setNodes((nds) => nds.concat({ id, type: kind, position, data }));
-      setAddOpen(false);
     },
     [setNodes],
   );
+
+  const handleAddNode = useCallback(
+    (type: NodeKind) => {
+      return addNode(type);
+    },
+    [addNode],
+  );
+
+  const saveSketchToResourceNode = useCallback(() => {
+    const canvas = sketchCanvasRef.current;
+    if (!canvas) return;
+    if (!hasSketchRef.current) return;
+
+    const dataUrl = canvas.toDataURL("image/png");
+    const id = `resource-${Date.now()}`;
+    const position = getViewportCenterFlowPosition();
+    const data: GrimpoNodeData = {
+      title: "Sketch",
+      notes: `![Sketch](${dataUrl})`,
+      link: "",
+    };
+
+    setNodes((nds) => nds.concat({ id, type: "resource", position, data }));
+
+    // Clear the sketch layer
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    hasSketchRef.current = false;
+  }, [getViewportCenterFlowPosition, setNodes]);
 
   const spawnThinkingPattern = useCallback(
     (args: { role: ThinkingRole; pattern: Exclude<ThinkingPattern, "blank"> }) => {
@@ -498,6 +678,50 @@ function ProjectContent({ id }: { id: string }) {
           : "bg-slate-50 text-slate-900"
       }`}
     >
+      {loadError && (
+        <div className="pointer-events-none absolute top-4 left-1/2 z-[120] -translate-x-1/2">
+          <div
+            className={[
+              "pointer-events-auto flex flex-col gap-2 rounded-2xl border p-4 backdrop-blur-md",
+              theme === "surface"
+                ? "border-rose-300 bg-white/90 text-rose-700 shadow-md"
+                : "border-rose-300/25 bg-slate-950/70 text-rose-100 shadow-[0_0_24px_rgba(244,63,94,0.22)]",
+            ].join(" ")}
+          >
+            <div className="flex items-center gap-3 text-[11px]">
+              <span className="max-w-[60vw] font-bold">
+                {loadError.message === "Auth service unavailable"
+                  ? "Backend auth/db is unavailable (Neon timeout)."
+                  : loadError.message}
+              </span>
+              <button
+                onClick={() => setReloadNonce((v) => v + 1)}
+                className={[
+                  "rounded-full border px-3 py-1 font-semibold transition-colors",
+                  theme === "surface"
+                    ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
+                    : "border-rose-300/20 bg-rose-500/10 text-rose-50 hover:bg-rose-500/15",
+                ].join(" ")}
+              >
+                Retry
+              </button>
+            </div>
+            {loadError.debug && (
+              <div className="mt-1 flex flex-col gap-1 text-[10px] opacity-80">
+                <div className="font-mono bg-black/20 p-2 rounded max-h-32 overflow-auto">
+                  {loadError.debug.message}
+                  {loadError.debug.cause && (
+                    <div className="mt-1 border-t border-white/10 pt-1 text-rose-300/80">
+                      Cause: {loadError.debug.cause}
+                    </div>
+                  )}
+                </div>
+                <div className="italic opacity-60">Check your DATABASE_URL and network connection.</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {!isBathysphereActive && (
         <div className="absolute top-4 left-4 z-50 flex items-center gap-4">
           <button
@@ -665,6 +889,13 @@ function ProjectContent({ id }: { id: string }) {
             defaultEdgeOptions={defaultEdgeOptions}
             onMove={onMove}
             onPaneClick={() => setActiveMascot(null)}
+            nodesDraggable={!isDrawingMode}
+            nodesConnectable={!isDrawingMode}
+            elementsSelectable={!isDrawingMode}
+            panOnDrag={!isDrawingMode}
+            zoomOnScroll={!isDrawingMode}
+            zoomOnPinch={!isDrawingMode}
+            zoomOnDoubleClick={!isDrawingMode}
             onInit={(instance) => {
               rfRef.current = instance;
               if (initialViewportRef.current) {
@@ -684,6 +915,17 @@ function ProjectContent({ id }: { id: string }) {
             />
             <Controls position="bottom-left" style={{ bottom: 140 }} />
           </ReactFlow>
+
+          {/* Drawing overlay (only active in drawing mode) */}
+          <DrawingOverlay
+            active={isDrawingMode}
+            theme={theme}
+            wrapperRef={wrapperRef}
+            canvasRef={sketchCanvasRef}
+            onHasInk={() => {
+              hasSketchRef.current = true;
+            }}
+          />
 
           <TemplateSpawner onSpawnPattern={spawnThinkingPattern} />
         </>
@@ -771,58 +1013,23 @@ function ProjectContent({ id }: { id: string }) {
       )}
 
       {!isBathysphereActive && (
-      <div className="pointer-events-none absolute bottom-5 right-5 z-50">
-        <div className="pointer-events-auto relative">
-          {addOpen ? (
-            <div className={`mb-3 flex flex-col gap-2 rounded-3xl border p-2 backdrop-blur-md transition-all duration-300 ${
-              theme === 'surface'
-                ? 'border-slate-300 bg-white/90 shadow-xl'
-                : 'border-rose-300/20 bg-slate-950/50 shadow-[0_0_24px_rgba(244,63,94,0.22)]'
-            }`}>
-              <button
-                className={`rounded-2xl px-4 py-2 text-left text-sm transition-colors ${
-                  theme === 'surface' ? 'text-slate-700 hover:bg-slate-100' : 'text-rose-100 hover:bg-white/5'
-                }`}
-                onClick={() => addNode("strategy")}
-              >
-                + Strategy node
-              </button>
-              <button
-                className={`rounded-2xl px-4 py-2 text-left text-sm transition-colors ${
-                  theme === 'surface' ? 'text-slate-700 hover:bg-slate-100' : 'text-rose-100 hover:bg-white/5'
-                }`}
-                onClick={() => addNode("tactical")}
-              >
-                + Tactical node
-              </button>
-              <button
-                className={`rounded-2xl px-4 py-2 text-left text-sm transition-colors ${
-                  theme === 'surface' ? 'text-slate-700 hover:bg-slate-100' : 'text-rose-100 hover:bg-white/5'
-                }`}
-                onClick={() => addNode("resource")}
-              >
-                + Resource node
-              </button>
-            </div>
-          ) : null}
-
-          <button
-            onClick={() => setAddOpen((v) => !v)}
-            className={`grid h-14 w-14 place-items-center rounded-full border backdrop-blur-md transition-all hover:scale-[1.03] ${
-              theme === 'surface'
-                ? 'border-slate-300 bg-slate-900 text-white shadow-lg hover:bg-slate-800'
-                : 'border-rose-300/25 bg-rose-500/20 text-rose-50 shadow-[0_0_26px_rgba(244,63,94,0.35)]'
-            }`}
-            title="Add node"
-          >
-            <span className="text-2xl leading-none">+</span>
-          </button>
-        </div>
-      </div>
+        <CreationDock
+          theme={theme}
+          isDrawingMode={isDrawingMode}
+          onToggleDrawingMode={() => setIsDrawingMode((v) => !v)}
+          onDoneDrawing={() => {
+            // Today, drawing is a UI mode toggle; this hook is intentionally where
+            // we persist the sketch layer.
+            saveSketchToResourceNode();
+            handleAutoSave();
+            setIsDrawingMode(false);
+          }}
+          handleAddNode={handleAddNode}
+        />
       )}
 
       {!isBathysphereActive && (
-      <div className="pointer-events-none absolute bottom-5 right-24 z-50">
+      <div className="pointer-events-none absolute bottom-5 right-44 z-50">
         <button
           className={`pointer-events-auto rounded-full border px-4 py-2 text-xs backdrop-blur-md transition-all duration-300 disabled:opacity-50 ${
             theme === 'surface'

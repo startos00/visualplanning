@@ -65,10 +65,22 @@ export async function getUserProjects() {
  */
 export async function getProjectData(projectId: string) {
   try {
-    const session = await auth.api.getSession({ headers: await headers() });
-    if (!session) {
-      return { nodes: null, edges: null, error: "Unauthorized" };
+    let session: Awaited<ReturnType<typeof auth.api.getSession>> | null = null;
+    try {
+      session = await auth.api.getSession({ headers: await headers() });
+    } catch (error) {
+      // Better-Auth can throw when its DB/session store is unavailable.
+      console.error("Error fetching project data (session):", error);
+      const debug = {
+        name: (error as any)?.name ?? "Error",
+        code: (error as any)?.code ?? null,
+        message: String((error as any)?.message ?? error).slice(0, 400),
+        cause: (error as any)?.cause ? String((error as any)?.cause) : null,
+      };
+      return { nodes: null, edges: null, error: "Auth service unavailable", debug };
     }
+
+    if (!session) return { nodes: null, edges: null, error: "Unauthorized" };
 
     const userId = session.user.id;
 
@@ -90,7 +102,13 @@ export async function getProjectData(projectId: string) {
     };
   } catch (error) {
     console.error("Error fetching project data:", error);
-    return { nodes: null, edges: null, error: "Failed to load project" };
+    const debug = {
+      name: (error as any)?.name ?? "Error",
+      code: (error as any)?.code ?? null,
+      message: String((error as any)?.message ?? error).slice(0, 400),
+      cause: (error as any)?.cause ? String((error as any)?.cause) : null,
+    };
+    return { nodes: null, edges: null, error: "Failed to load project", debug };
   }
 }
 
