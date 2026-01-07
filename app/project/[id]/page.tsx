@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, use } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -20,9 +20,9 @@ import type { GrimpoNodeData, ModeSetting, NodeKind } from "@/app/lib/graph";
 import { seedGraph } from "@/app/lib/graph";
 import { nodeTypes } from "@/app/nodes/nodeTypes";
 import { clearState } from "@/app/lib/storage";
-import { getProjectData, saveProjectData } from "@/app/actions/projects";
+import { getProjectData, saveProjectData, getUserProjects } from "@/app/actions/projects";
 import { useRouter } from "next/navigation";
-import { Book, ChevronLeft } from "lucide-react";
+import { Book, ChevronLeft, ChevronDown, Map } from "lucide-react";
 import { DumboOctopus } from "@/app/components/DumboOctopus";
 import { DumboOctopusCornerLogo } from "@/app/components/DumboOctopusCornerLogo";
 import { Mascot, type MascotVariant } from "@/app/components/Mascot";
@@ -50,6 +50,9 @@ function ProjectContent({ id }: { id: string }) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [projectName, setProjectName] = useState("Loading Sector...");
+  const [allProjects, setAllProjects] = useState<any[]>([]);
+  const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
+  const switcherRef = useRef<HTMLDivElement>(null);
 
   const [viewport, setViewport] = useState<Viewport>({ x: 0, y: 0, zoom: 1 });
   const [modeSetting, setModeSetting] = useState<ModeSetting>("auto");
@@ -67,6 +70,12 @@ function ProjectContent({ id }: { id: string }) {
   const [highlightedNodes, setHighlightedNodes] = useState<{ nodeIds: string[]; color: string; }>({ nodeIds: [], color: '' });
   const [currentAgent, setCurrentAgent] = useState<MascotVariant>("dumbo");
   const [activeMascot, setActiveMascot] = useState<MascotVariant | null>(null);
+
+  useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/7dbc43bc-e431-48bc-a404-d2c7ab4b2a70',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/project/[id]/page.tsx:ProjectContent:mount',message:'ProjectContent mounted (instrumentation active)',data:{projectId:id},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H5'})}).catch(()=>{});
+    // #endregion
+  }, [id]);
 
   const highlightTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const rfRef = useRef<ReactFlowInstance | null>(null);
@@ -156,7 +165,14 @@ function ProjectContent({ id }: { id: string }) {
     }
 
     async function load() {
-      const result = await getProjectData(id);
+      // Parallel fetch project data and all projects for the switcher
+      const [result, projectsList] = await Promise.all([
+        getProjectData(id),
+        getUserProjects()
+      ]);
+      
+      setAllProjects(projectsList);
+
       if (result.error) {
         console.error("Failed to load project:", result.error);
         if (result.error === "Unauthorized") {
@@ -187,6 +203,17 @@ function ProjectContent({ id }: { id: string }) {
     load();
   }, [id, router, setNodes, setEdges]);
 
+  // Click outside switcher handler
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (switcherRef.current && !switcherRef.current.contains(event.target as Node)) {
+        setIsSwitcherOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   // Debounced auto-save function
   const handleAutoSave = useCallback(() => {
     if (!loaded) return;
@@ -201,7 +228,24 @@ function ProjectContent({ id }: { id: string }) {
       const cleanNodes = JSON.parse(JSON.stringify(nodes));
       const cleanEdges = JSON.parse(JSON.stringify(edges));
 
-      const result = await saveProjectData(id, cleanNodes, cleanEdges);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/7dbc43bc-e431-48bc-a404-d2c7ab4b2a70',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/project/[id]/page.tsx:handleAutoSave:preSave',message:'Auto-save firing',data:{projectId:id,loaded,nodesLen:Array.isArray(cleanNodes)?cleanNodes.length:null,edgesLen:Array.isArray(cleanEdges)?cleanEdges.length:null,approxJsonLen:(()=>{try{return JSON.stringify({nodes:cleanNodes,edges:cleanEdges}).length}catch{return -1}})()},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H2'})}).catch(()=>{});
+      // #endregion
+
+      let result: any;
+      try {
+        result = await saveProjectData(id, cleanNodes, cleanEdges);
+      } catch (e: any) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/7dbc43bc-e431-48bc-a404-d2c7ab4b2a70',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/project/[id]/page.tsx:handleAutoSave:saveThrow',message:'saveProjectData threw',data:{projectId:id,errorName:e?.name??null,errorMessage:String(e?.message??e).slice(0,300)},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H3'})}).catch(()=>{});
+        // #endregion
+        setSaveStatus("idle");
+        return;
+      }
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/7dbc43bc-e431-48bc-a404-d2c7ab4b2a70',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/project/[id]/page.tsx:handleAutoSave:postSave',message:'Auto-save result',data:{projectId:id,success:!!result?.success,error:result?.error??null,debugName:result?.debug?.name??null,debugCode:result?.debug?.code??null,debugMessage:typeof result?.debug?.message==='string'?result.debug.message.slice(0,300):null},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H1'})}).catch(()=>{});
+      // #endregion
       
       if (result.success) {
         setSaveStatus("saved");
@@ -374,6 +418,7 @@ function ProjectContent({ id }: { id: string }) {
         hidden: effectiveMode === "strategy" && n.type === "tactical",
         selected: selectedNodeIds.has(n.id),
         className: isHighlighted ? `node-highlight node-highlight-${highlightedNodes.color}` : '',
+        dragHandle: ".drag-handle",
         data: {
           ...n.data,
           zoom: viewport.zoom,
@@ -466,12 +511,65 @@ function ProjectContent({ id }: { id: string }) {
             <ChevronLeft size={14} />
             Mission Control
           </button>
-          <div className={`px-2 py-1 rounded-lg backdrop-blur-md border text-sm font-medium ${
-            theme === 'surface'
-              ? 'border-slate-200 bg-white/50 text-slate-700'
-              : 'border-cyan-500/20 bg-slate-900/40 text-cyan-200 shadow-[0_0_15px_rgba(34,211,238,0.05)]'
-          }`}>
-            Sector: {projectName}
+          
+          <div className="relative" ref={switcherRef}>
+            <button
+              onClick={() => setIsSwitcherOpen(!isSwitcherOpen)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-medium backdrop-blur-md transition-all duration-300 ${
+                theme === 'surface'
+                  ? 'border-slate-200 bg-white/50 text-slate-700 hover:bg-white/80'
+                  : 'border-cyan-500/20 bg-slate-900/40 text-cyan-200 hover:bg-slate-900/60 shadow-[0_0_15px_rgba(34,211,238,0.05)]'
+              }`}
+            >
+              <Map size={14} className={theme === 'surface' ? 'text-slate-500' : 'text-cyan-400'} />
+              <span>Sector: {projectName}</span>
+              <ChevronDown size={14} className={`transition-transform duration-200 ${isSwitcherOpen ? 'rotate-180' : ''} ${theme === 'surface' ? 'text-slate-400' : 'text-cyan-500/50'}`} />
+            </button>
+
+            <AnimatePresence>
+              {isSwitcherOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                  className={`absolute left-0 mt-2 min-w-[200px] overflow-hidden rounded-2xl border p-1 backdrop-blur-xl shadow-2xl z-[100] ${
+                    theme === 'surface'
+                      ? 'border-slate-200 bg-white/95 text-slate-700'
+                      : 'border-cyan-500/30 bg-slate-950/90 text-cyan-100'
+                  }`}
+                >
+                  <div className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest ${theme === 'surface' ? 'text-slate-400' : 'text-cyan-500/50'}`}>
+                    Available Sectors
+                  </div>
+                  {allProjects.map((project) => (
+                    <button
+                      key={project.id}
+                      onClick={() => {
+                        if (project.id !== id) {
+                          router.push(`/project/${project.id}`);
+                        }
+                        setIsSwitcherOpen(false);
+                      }}
+                      className={`w-full flex items-center gap-3 rounded-xl px-3 py-2 text-left text-xs transition-all ${
+                        project.id === id
+                          ? theme === 'surface'
+                            ? 'bg-slate-100 text-slate-900 font-semibold'
+                            : 'bg-cyan-500/20 text-cyan-50 shadow-[inset_0_0_10px_rgba(34,211,238,0.2)]'
+                          : theme === 'surface'
+                            ? 'hover:bg-slate-50 text-slate-600'
+                            : 'hover:bg-white/5 text-cyan-100/70 hover:text-cyan-50'
+                      }`}
+                    >
+                      <Map size={12} className={project.id === id ? 'text-cyan-400' : 'opacity-40'} />
+                      <span className="truncate">{project.name}</span>
+                      {project.id === id && (
+                        <div className={`ml-auto h-1 w-1 rounded-full ${theme === 'surface' ? 'bg-slate-900' : 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]'}`} />
+                      )}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       )}

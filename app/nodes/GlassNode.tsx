@@ -386,8 +386,16 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
   };
 
   const handleClass = isSurface
-    ? "!h-3 !w-3 !border-0 !bg-slate-400"
-    : "!h-3 !w-3 !border-0 !bg-cyan-300/70 !shadow-[0_0_10px_rgba(34,211,238,0.55)]";
+    ? "!h-4 !w-4 !border-2 !border-white !bg-slate-400"
+    : "!h-4 !w-4 !border-2 !border-cyan-200 !bg-cyan-400 !shadow-[0_0_15px_rgba(34,211,238,0.8)]";
+
+  // Dynamic handle scaling for better accessibility at low zoom levels
+  const handleScale = zoom < 0.8 ? Math.min(2.5, 0.8 / zoom) : 1;
+  const handleStyleAttr = {
+    transform: `translate(-50%, -50%) scale(${handleScale})`,
+    transformOrigin: 'center',
+    transition: 'transform 0.1s ease-out',
+  };
 
   return (
     <>
@@ -402,7 +410,7 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
       )}
       <div
         className={[
-          "relative w-[320px] rounded-3xl border transition-all duration-300 overflow-hidden",
+          "relative w-[320px] rounded-3xl border transition-all duration-300",
           containerClasses,
           done ? "opacity-60" : "",
           swallowing ? "scale-0 opacity-0" : "",
@@ -414,29 +422,31 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
         {/* top accent bar (Surface Mode only) */}
         {isSurface && data.color && (
           <div 
-            className="absolute top-0 left-0 right-0 h-1.5" 
+            className="absolute top-0 left-0 right-0 h-1.5 rounded-t-[22px]" 
             style={{ backgroundColor: selectedColor }}
           />
         )}
 
         {/* sheen (Abyss only) */}
         {!isSurface && (
-          <div className="pointer-events-none absolute inset-0 rounded-3xl bg-gradient-to-b from-white/10 to-transparent" />
+          <div className="pointer-events-none absolute inset-0 rounded-[22px] bg-gradient-to-b from-white/10 to-transparent" />
         )}
 
         <Handle
           type="target"
           position={Position.Left}
-          className={handleClass}
+          className={`${handleClass} !left-0 !top-1/2 !translate-x-[-50%] !translate-y-[-50%]`}
+          style={handleStyleAttr}
         />
         <Handle
           type="source"
           position={Position.Right}
-          className={handleClass}
+          className={`${handleClass} !right-0 !top-1/2 !translate-x-[50%] !translate-y-[-50%]`}
+          style={handleStyleAttr}
         />
 
-        <div className="relative p-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="relative p-4 drag-handle cursor-grab active:cursor-grabbing">
+          <div className="mb-3 flex items-center justify-between gap-3 pointer-events-none">
             <div className={`flex items-center gap-2 text-xs tracking-widest ${isSurface && data.color ? '' : textSecondary}`}>
               <badge.Icon className={`h-4 w-4 ${isSurface && data.color ? '' : textSecondary}`} style={isSurface && data.color ? { color: selectedColor } : {}} />
               <span 
@@ -451,7 +461,7 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                 {badge.label}
               </span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 pointer-events-auto">
               <div className="relative flex items-center">
                 <input
                   type="date"

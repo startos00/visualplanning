@@ -99,8 +99,15 @@ export async function getProjectData(projectId: string) {
  */
 export async function saveProjectData(projectId: string, nodes: GrimpoNode[], edges: Edge[]) {
   try {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/7dbc43bc-e431-48bc-a404-d2c7ab4b2a70',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/actions/projects.ts:saveProjectData:entry',message:'saveProjectData entry',data:{projectId,nodesLen:Array.isArray(nodes)?nodes.length:null,edgesLen:Array.isArray(edges)?edges.length:null,approxJsonLen:(()=>{try{return JSON.stringify({nodes,edges}).length}catch{return -1}})()},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H2'})}).catch(()=>{});
+    // #endregion
+
     const session = await auth.api.getSession({ headers: await headers() });
     if (!session) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/7dbc43bc-e431-48bc-a404-d2c7ab4b2a70',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/actions/projects.ts:saveProjectData:noSession',message:'No session for saveProjectData',data:{projectId},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H1'})}).catch(()=>{});
+      // #endregion
       return { success: false, error: "Unauthorized" };
     }
 
@@ -117,13 +124,24 @@ export async function saveProjectData(projectId: string, nodes: GrimpoNode[], ed
       .returning();
 
     if (!updatedProject) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/7dbc43bc-e431-48bc-a404-d2c7ab4b2a70',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/actions/projects.ts:saveProjectData:notFound',message:'No project updated (not found/unauthorized)',data:{projectId},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H4'})}).catch(()=>{});
+      // #endregion
       return { success: false, error: "Project not found or unauthorized" };
     }
 
     return { success: true };
   } catch (error) {
     console.error("Error saving project data:", error);
-    return { success: false, error: "Failed to save project data" };
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/7dbc43bc-e431-48bc-a404-d2c7ab4b2a70',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/actions/projects.ts:saveProjectData:catch',message:'Exception in saveProjectData',data:{projectId,errorName:(error as any)?.name??null,errorMessage:String((error as any)?.message??error).slice(0,300),errorCode:(error as any)?.code??null},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H3'})}).catch(()=>{});
+    // #endregion
+    const debug = {
+      name: (error as any)?.name ?? null,
+      code: (error as any)?.code ?? null,
+      message: String((error as any)?.message ?? error).slice(0, 300),
+    };
+    return { success: false, error: "Failed to save project data", debug };
   }
 }
 
