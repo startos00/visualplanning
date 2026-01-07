@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
+import { motion, AnimatePresence } from "framer-motion";
 import { Send, X, MessageCircle, ChevronUp, ChevronDown, Sparkles, Clock, AlertTriangle, Calendar, Search } from "lucide-react";
 import { Mascot, MascotVariant } from "./Mascot";
 import { AiProviderSelector } from "./ui/AiProviderSelector";
@@ -229,12 +230,16 @@ export function AgentChat({ initialAgent = "dumbo", onHighlightNodes, theme = "a
   }
 
   return (
-    <div
+    <motion.div
+      drag
+      dragMomentum={false}
       className={`fixed bottom-6 right-6 z-[100] flex flex-col overflow-hidden rounded-3xl border transition-all duration-300 nopan nowheel nodrag ${
         agentColors[agent]
       } ${isMinimized ? "h-14 w-64" : "h-[600px] w-80 md:w-96"}`}
     >
-      <div className={`flex items-center justify-between bg-gradient-to-r px-4 py-3 ${agentHeaderColors[agent]}`}>
+      <div 
+        className={`flex items-center justify-between bg-gradient-to-r px-4 py-3 cursor-grab active:cursor-grabbing ${agentHeaderColors[agent]}`}
+      >
         <div className="flex items-center gap-3">
           <Mascot variant={agent} size={28} theme={theme} />
           <div className="flex flex-col">
@@ -274,6 +279,7 @@ export function AgentChat({ initialAgent = "dumbo", onHighlightNodes, theme = "a
               <button
                 key={v}
                 onClick={() => setAgent(v)}
+                onPointerDown={(e) => e.stopPropagation()}
                 className={`flex-1 rounded-xl py-1 text-[10px] font-bold uppercase tracking-wider transition-all ${
                   agent === v 
                     ? isSurface ? "bg-white text-slate-900 shadow-sm border border-slate-200" : "bg-white/10 text-white" 
@@ -285,7 +291,11 @@ export function AgentChat({ initialAgent = "dumbo", onHighlightNodes, theme = "a
             ))}
           </div>
 
-          <div ref={scrollRef} className={`flex-1 overflow-y-auto p-4 space-y-4 ${isSurface ? 'bg-slate-50/30' : 'bg-black/40'}`}>
+          <div 
+            ref={scrollRef} 
+            className={`flex-1 overflow-y-auto p-4 space-y-4 ${isSurface ? 'bg-slate-50/30' : 'bg-black/40'}`}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
             {messages.length === 0 && (
               <div className={`flex h-full flex-col items-center justify-center text-center ${isSurface ? 'text-slate-900' : 'text-white'}`}>
                 <Sparkles className={`mb-3 h-10 w-10 ${isSurface ? 'text-cyan-600' : 'text-cyan-400'}`} />
@@ -338,7 +348,10 @@ export function AgentChat({ initialAgent = "dumbo", onHighlightNodes, theme = "a
           </div>
 
           {agent === "dumbo" && (
-            <div className={`flex flex-wrap gap-2 px-4 py-3 border-t ${isSurface ? 'bg-white border-slate-100' : 'bg-slate-900/80 border-white/10'}`}>
+            <div 
+              className={`flex flex-wrap gap-2 px-4 py-3 border-t ${isSurface ? 'bg-white border-slate-100' : 'bg-slate-900/80 border-white/10'}`}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
               {quickCommands.map((cmd) => (
                 <button
                   key={cmd.label}
@@ -357,7 +370,11 @@ export function AgentChat({ initialAgent = "dumbo", onHighlightNodes, theme = "a
             </div>
           )}
 
-          <form onSubmit={(e) => handleSubmit(e)} className={`border-t p-4 ${isSurface ? 'bg-white border-slate-100' : 'bg-slate-900 border-white/10'}`}>
+          <form 
+            onSubmit={(e) => handleSubmit(e)} 
+            className={`border-t p-4 ${isSurface ? 'bg-white border-slate-100' : 'bg-slate-900 border-white/10'}`}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
             <div className="flex gap-2">
               <input
                 ref={inputRef}
@@ -387,6 +404,6 @@ export function AgentChat({ initialAgent = "dumbo", onHighlightNodes, theme = "a
           </form>
         </>
       )}
-    </div>
+    </motion.div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, use } from "react";
+import { motion } from "framer-motion";
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -763,10 +764,15 @@ function HomeContent() {
       </div>
       )}
 
-      {/* Mascot variants (demo) */}
+      {/* Mascot variants (draggable) */}
       {!isBathysphereActive && (
-      <div className="pointer-events-none absolute bottom-5 left-5 z-50">
-        <div className={`pointer-events-auto rounded-3xl border p-3 backdrop-blur-md transition-all duration-300 ${
+      <motion.div 
+        drag 
+        dragMomentum={false}
+        dragConstraints={wrapperRef}
+        className="pointer-events-none absolute bottom-5 left-5 z-50"
+      >
+        <div className={`pointer-events-auto rounded-3xl border p-3 backdrop-blur-md transition-all duration-300 cursor-grab active:cursor-grabbing ${
           theme === 'surface'
             ? 'border-slate-300 bg-white/80 shadow-lg'
             : 'border-cyan-300/15 bg-slate-950/35 shadow-[0_0_18px_rgba(34,211,238,0.16)]'
@@ -793,6 +799,7 @@ function HomeContent() {
               <div className={`text-[10px] ${theme === 'surface' ? 'text-slate-500' : 'text-cyan-50/70'}`}>Manager</div>
               {theme === "surface" && selectedNodeIds.size >= 2 && (
                 <button
+                  onPointerDown={(e) => e.stopPropagation()} // Prevent drag when clicking button
                   onClick={onScatter}
                   className="mt-1 rounded-md bg-slate-900 px-2 py-0.5 text-[9px] font-bold text-white shadow-sm hover:bg-slate-700 transition-colors"
                   title="Scatter selected nodes"
@@ -807,7 +814,7 @@ function HomeContent() {
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
       )}
 
       {/* Save status indicator */}
