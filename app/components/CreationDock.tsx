@@ -10,8 +10,18 @@ type CreationDockProps = {
   onToggleDrawingMode: () => void;
   onDoneDrawing: () => void;
   onClearDrawing?: () => void;
+  activeColor?: string;
+  onColorChange?: (color: string) => void;
   handleAddNode: (type: "strategy" | "tactical" | "resource") => void;
 };
+
+const COLORS = [
+  { name: "Cyan", value: "#22d3ee" },
+  { name: "Magenta", value: "#e879f9" },
+  { name: "Lime", value: "#a3e635" },
+  { name: "Amber", value: "#fbbf24" },
+  { name: "White", value: "#ffffff" },
+];
 
 export function CreationDock({
   theme,
@@ -19,6 +29,8 @@ export function CreationDock({
   onToggleDrawingMode,
   onDoneDrawing,
   onClearDrawing,
+  activeColor = "#22d3ee",
+  onColorChange,
   handleAddNode,
 }: CreationDockProps) {
   const [open, setOpen] = useState(false);
@@ -106,8 +118,22 @@ export function CreationDock({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 8, scale: 0.98 }}
               transition={{ duration: 0.16 }}
-              className="flex items-center gap-2"
+              className="flex items-center gap-3"
             >
+              <div className={`flex items-center gap-1.5 p-1.5 rounded-full border backdrop-blur-md ${panelClasses}`}>
+                {COLORS.map((color) => (
+                  <button
+                    key={color.value}
+                    onClick={() => onColorChange?.(color.value)}
+                    className={`w-6 h-6 rounded-full border-2 transition-all hover:scale-110 ${
+                      activeColor === color.value ? "border-white scale-110 shadow-lg" : "border-transparent"
+                    }`}
+                    style={{ backgroundColor: color.value }}
+                    title={color.name}
+                  />
+                ))}
+              </div>
+
               <button
                 onClick={onClearDrawing}
                 className={[

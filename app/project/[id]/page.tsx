@@ -49,12 +49,14 @@ const memoizedEdgeTypes = {};
 function DrawingOverlay({
   active,
   theme,
+  color,
   wrapperRef,
   canvasRef,
   onHasInk,
 }: {
   active: boolean;
   theme: "abyss" | "surface";
+  color: string;
   wrapperRef: React.RefObject<HTMLDivElement | null>;
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   onHasInk: () => void;
@@ -90,14 +92,14 @@ function DrawingOverlay({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.lineWidth = theme === "surface" ? 3 : 3.5;
-    ctx.strokeStyle = theme === "surface" ? "rgba(14,116,144,0.9)" : "rgba(34,211,238,0.9)";
+    ctx.lineWidth = 3.5;
+    ctx.strokeStyle = color;
 
     // Restore previous bitmap (scaled into new canvas)
     if (prev.width > 0 && prev.height > 0) {
       ctx.drawImage(prev, 0, 0, prev.width / dpr, prev.height / dpr);
     }
-  }, [canvasRef, theme, wrapperRef]);
+  }, [canvasRef, color, wrapperRef]);
 
   useEffect(() => {
     resizeToWrapper();
@@ -116,12 +118,12 @@ function DrawingOverlay({
   }, [active, resizeToWrapper]);
 
   useEffect(() => {
-    // Reapply stroke style if theme changes
+    // Reapply stroke style if color changes
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
     if (!ctx) return;
-    ctx.strokeStyle = theme === "surface" ? "rgba(14,116,144,0.9)" : "rgba(34,211,238,0.9)";
-  }, [canvasRef, theme]);
+    ctx.strokeStyle = color;
+  }, [canvasRef, color]);
 
   const toLocalPoint = useCallback(
     (evt: React.PointerEvent<HTMLCanvasElement>) => {
@@ -214,6 +216,7 @@ function ProjectContent({ id }: { id: string }) {
   const [currentAgent, setCurrentAgent] = useState<MascotVariant>("dumbo");
   const [activeMascot, setActiveMascot] = useState<MascotVariant | null>(null);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
+  const [penColor, setPenColor] = useState("#22d3ee");
   const sketchCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const hasSketchRef = useRef(false);
 
@@ -575,8 +578,10 @@ function ProjectContent({ id }: { id: string }) {
         ...n,
         hidden: effectiveMode === "strategy" && n.type === "tactical",
         selected: selectedNodeIds.has(n.id),
+        draggable: !n.data.locked,
+        selectable: true,
         className: isHighlighted ? `node-highlight node-highlight-${highlightedNodes.color}` : '',
-        dragHandle: ".drag-handle",
+        dragHandle: n.data.locked ? undefined : ".drag-handle",
         data: {
           ...n.data,
           zoom: viewport.zoom,
@@ -681,14 +686,14 @@ function ProjectContent({ id }: { id: string }) {
 
     const sketchData = {
       image: dataUrl,
-      width: Math.max(50, nodeWidth),
-      height: Math.max(50, nodeHeight),
     };
 
     setNodes((nds) => nds.concat({ 
       id, 
       type: "sketch", 
       position, 
+      width: Math.max(50, nodeWidth),
+      height: Math.max(50, nodeHeight),
       data: sketchData as any 
     }));
   }, [setNodes]);
@@ -981,6 +986,7 @@ function ProjectContent({ id }: { id: string }) {
           <DrawingOverlay
             active={isDrawingMode}
             theme={theme}
+            color={penColor}
             wrapperRef={wrapperRef}
             canvasRef={sketchCanvasRef}
             onHasInk={() => {
@@ -1079,6 +1085,8 @@ function ProjectContent({ id }: { id: string }) {
           isDrawingMode={isDrawingMode}
           onToggleDrawingMode={() => setIsDrawingMode((v) => !v)}
           onClearDrawing={clearSketch}
+          activeColor={penColor}
+          onColorChange={setPenColor}
           onDoneDrawing={finishDrawing}
           handleAddNode={handleAddNode}
         />
