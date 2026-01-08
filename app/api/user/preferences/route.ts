@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@/app/lib/auth";
+import { safeGetSession } from "@/app/lib/safeSession";
 import { getUserAiPreferences, updateUserAiPreference, deleteUserAiPreference } from "@/app/actions/userPreferences";
 import type { AgentType, Provider } from "@/app/lib/ai/aiConstants";
 import { isValidModel } from "@/app/lib/ai/aiConstants";
@@ -9,8 +8,9 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    const session = await auth.api.getSession({ headers: await headers() });
+    const { session, error, debug } = await safeGetSession();
     if (!session) {
+      if (error) return NextResponse.json({ error, debug }, { status: 503 });
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -31,8 +31,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const session = await auth.api.getSession({ headers: await headers() });
+    const { session, error, debug } = await safeGetSession();
     if (!session) {
+      if (error) return NextResponse.json({ error, debug }, { status: 503 });
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -96,8 +97,9 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const session = await auth.api.getSession({ headers: await headers() });
+    const { session, error, debug } = await safeGetSession();
     if (!session) {
+      if (error) return NextResponse.json({ error, debug }, { status: 503 });
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

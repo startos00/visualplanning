@@ -9,6 +9,7 @@ type CreationDockProps = {
   isDrawingMode: boolean;
   onToggleDrawingMode: () => void;
   onDoneDrawing: () => void;
+  onClearDrawing?: () => void;
   handleAddNode: (type: "strategy" | "tactical" | "resource") => void;
 };
 
@@ -17,6 +18,7 @@ export function CreationDock({
   isDrawingMode,
   onToggleDrawingMode,
   onDoneDrawing,
+  onClearDrawing,
   handleAddNode,
 }: CreationDockProps) {
   const [open, setOpen] = useState(false);
@@ -98,23 +100,39 @@ export function CreationDock({
 
         <AnimatePresence initial={false}>
           {isDrawingMode ? (
-            <motion.button
-              key="creationdock-done"
+            <motion.div
+              key="creationdock-drawing-tools"
               initial={{ opacity: 0, y: 8, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 8, scale: 0.98 }}
               transition={{ duration: 0.16 }}
-              onClick={onDoneDrawing}
-              className={[
-                "rounded-full border px-5 py-3 text-xs font-semibold tracking-wide backdrop-blur-md transition-all hover:scale-[1.02]",
-                isSurface
-                  ? "border-cyan-500/30 bg-cyan-600 text-white shadow-md hover:bg-cyan-700"
-                  : "border-cyan-300/30 bg-cyan-400/20 text-cyan-50 shadow-[0_0_22px_rgba(34,211,238,0.35)] hover:bg-cyan-400/25",
-              ].join(" ")}
-              title="Done drawing"
+              className="flex items-center gap-2"
             >
-              DONE DRAWING
-            </motion.button>
+              <button
+                onClick={onClearDrawing}
+                className={[
+                  "rounded-full border px-4 py-3 text-xs font-semibold tracking-wide backdrop-blur-md transition-all hover:scale-[1.02]",
+                  isSurface
+                    ? "border-slate-300 bg-white text-slate-600 hover:bg-slate-100"
+                    : "border-rose-300/20 bg-rose-500/10 text-rose-100 hover:bg-rose-500/20",
+                ].join(" ")}
+                title="Clear sketch"
+              >
+                CLEAR
+              </button>
+              <button
+                onClick={onDoneDrawing}
+                className={[
+                  "rounded-full border px-5 py-3 text-xs font-semibold tracking-wide backdrop-blur-md transition-all hover:scale-[1.02]",
+                  isSurface
+                    ? "border-cyan-500/30 bg-cyan-600 text-white shadow-md hover:bg-cyan-700"
+                    : "border-cyan-300/30 bg-cyan-400/20 text-cyan-50 shadow-[0_0_22px_rgba(34,211,238,0.35)] hover:bg-cyan-400/25",
+                ].join(" ")}
+                title="Done drawing"
+              >
+                DONE DRAWING
+              </button>
+            </motion.div>
           ) : (
             <motion.button
               key="creationdock-plus"

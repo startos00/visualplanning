@@ -3,8 +3,7 @@
 import { db } from "@/app/lib/db";
 import { userAiPreferences } from "@/app/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { auth } from "@/app/lib/auth";
-import { headers } from "next/headers";
+import { safeGetSession } from "@/app/lib/safeSession";
 import type { AgentType, Provider } from "@/app/lib/ai/aiConstants";
 import { isValidModel } from "@/app/lib/ai/aiConstants";
 
@@ -13,10 +12,8 @@ import { isValidModel } from "@/app/lib/ai/aiConstants";
  */
 export async function getUserAiPreferences() {
   try {
-    const session = await auth.api.getSession({ headers: await headers() });
-    if (!session) {
-      return { error: "Unauthorized" };
-    }
+    const { session, error, debug } = await safeGetSession();
+    if (!session) return { error: error ?? "Unauthorized", debug: debug ?? undefined };
 
     const preferences = await db
       .select()
@@ -76,10 +73,8 @@ export async function updateUserAiPreference(
   model: string
 ) {
   try {
-    const session = await auth.api.getSession({ headers: await headers() });
-    if (!session) {
-      return { error: "Unauthorized" };
-    }
+    const { session, error, debug } = await safeGetSession();
+    if (!session) return { error: error ?? "Unauthorized", debug: debug ?? undefined };
 
     // Validate provider/model combination
     if (!isValidModel(provider, model)) {
@@ -135,10 +130,8 @@ export async function updateUserAiPreference(
  */
 export async function deleteUserAiPreference(agentType: AgentType) {
   try {
-    const session = await auth.api.getSession({ headers: await headers() });
-    if (!session) {
-      return { error: "Unauthorized" };
-    }
+    const { session, error, debug } = await safeGetSession();
+    if (!session) return { error: error ?? "Unauthorized", debug: debug ?? undefined };
 
     await db
       .delete(userAiPreferences)

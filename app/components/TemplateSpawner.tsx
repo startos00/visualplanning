@@ -7,6 +7,7 @@ import { AbyssalDropdown } from "./ui/AbyssalDropdown";
 
 export type TemplateSpawnerProps = {
   onSpawnPattern: (args: { role: ThinkingRole; pattern: Exclude<ThinkingPattern, "blank"> }) => void;
+  theme?: "abyss" | "surface";
 };
 
 const ROLE_OPTIONS = [
@@ -24,23 +25,30 @@ const PATTERN_OPTIONS = [
 ];
 
 export function TemplateSpawner(props: TemplateSpawnerProps) {
-  const { onSpawnPattern } = props;
+  const { onSpawnPattern, theme = "abyss" } = props;
 
   const [currentRole, setCurrentRole] = useState<ThinkingRole>("General");
   const [patternChoice, setPatternChoice] = useState<ThinkingPattern>("blank");
 
+  const isSurface = theme === "surface";
+
   return (
     <div className="pointer-events-none absolute left-1/2 top-4 z-50 -translate-x-1/2">
-      <div className="pointer-events-auto flex items-center gap-4 rounded-full border border-cyan-300/20 bg-slate-950/40 px-4 py-2 backdrop-blur-md shadow-[0_0_18px_rgba(34,211,238,0.18)]">
+      <div className={`pointer-events-auto flex items-center gap-4 rounded-full border px-4 py-2 backdrop-blur-md transition-all duration-300 ${
+        isSurface
+          ? 'border-slate-300 bg-white/80 shadow-md'
+          : 'border-cyan-300/20 bg-slate-950/40 shadow-[0_0_18px_rgba(34,211,238,0.18)]'
+      }`}>
         <AbyssalDropdown
           label="ROLE"
           value={currentRole}
           options={ROLE_OPTIONS}
           onChange={(val) => setCurrentRole(val as ThinkingRole)}
           title="Role context"
+          theme={theme}
         />
 
-        <div className="h-5 w-px bg-cyan-300/15" />
+        <div className={`h-5 w-px ${isSurface ? 'bg-slate-300' : 'bg-cyan-300/15'}`} />
 
         <AbyssalDropdown
           label="SPAWN PATTERN"
@@ -55,7 +63,8 @@ export function TemplateSpawner(props: TemplateSpawnerProps) {
             setPatternChoice("blank");
           }}
           title="Spawn a thinking pattern template"
-          className="text-rose-50"
+          className={isSurface ? '' : 'text-rose-50'}
+          theme={theme}
         />
       </div>
     </div>

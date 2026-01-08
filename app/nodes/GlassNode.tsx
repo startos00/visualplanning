@@ -845,9 +845,9 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                   </div>
                 )}
               </div>
-
-              {type === "tactical" ? (
-                <div className="flex items-center justify-between">
+              
+              <div className="flex items-center justify-between pt-2">
+                {type === "tactical" ? (
                   <AbyssalCheckbox
                     label="Done"
                     checked={data.status === "done"}
@@ -857,23 +857,24 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                       if (checked) data.onTaskDone?.(id);
                     }}
                   />
-                  <button
-                    onClick={() => {
-                      setSwallowing(true);
-                      setTimeout(() => data.onDelete?.(id), 220);
-                    }}
-                    className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-                      isSurface 
-                        ? "border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200" 
-                        : "border-rose-300/20 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20"
-                    }`}
-                  >
-                    Swallow
-                  </button>
-                </div>
-              ) : null}
+                ) : <div />}
+                <button
+                  onClick={() => {
+                    setSwallowing(true);
+                    setTimeout(() => data.onDelete?.(id), 220);
+                  }}
+                  className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                    isSurface 
+                      ? "border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200" 
+                      : "border-rose-300/20 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20"
+                  }`}
+                  title="Remove node from canvas"
+                >
+                  Swallow
+                </button>
+              </div>
 
-              <div className="flex items-center justify-center gap-2 pt-2">
+              <div className="flex items-center justify-center gap-2 pt-2 border-t border-white/5 mt-2">
                 {Object.values(COLORS).map((color) => {
                   const isSelected = (data.color || (isSurface ? "#94a3b8" : DEFAULT_COLOR)) === color.hex;
                   return (

@@ -321,7 +321,12 @@ function ProjectContent({ id }: { id: string }) {
       setAllProjects(projectsList);
 
       if (result.error) {
-        console.error("Failed to load project:", result.error, (result as any)?.debug ?? null);
+        const transient = result.error === "Database unavailable" || result.error === "Auth service unavailable";
+        (transient ? console.warn : console.error)(
+          "Failed to load project:",
+          result.error,
+          (result as any)?.debug ?? null
+        );
         if (result.error === "Unauthorized") {
           router.push("/login");
         } else if (result.error === "Project not found") {
@@ -407,7 +412,10 @@ function ProjectContent({ id }: { id: string }) {
             router.push("/login");
           }, 1500);
         } else {
-          console.error("Failed to save:", result.error);
+          console.error("Failed to save:", result.error, result.debug);
+          if (result.error === "Auth service unavailable" || result.error === "Database unavailable") {
+            setLoadError({ message: result.error, debug: result.debug });
+          }
           setSaveStatus("idle");
         }
       }
@@ -631,27 +639,76 @@ function ProjectContent({ id }: { id: string }) {
 
   const saveSketchToResourceNode = useCallback(() => {
     const canvas = sketchCanvasRef.current;
-    if (!canvas) return;
-    if (!hasSketchRef.current) return;
+    if (!canvas || !hasSketchRef.current || !rfRef.current) return;
 
+    // 1. Get the bounding box of the ink in screen space
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    
+    let minX = canvas.width, minY = canvas.height, maxX = 0, maxY = 0;
+    let found = false;
+
+    // Simple alpha-check to find drawing bounds
+    for (let y = 0; y < canvas.height; y++) {
+      for (let x = 0; x < canvas.width; x++) {
+        const alpha = data[(y * canvas.width + x) * 4 + 3];
+        if (alpha > 0) {
+          if (x < minX) minX = x;
+          if (y < minY) minY = y;
+          if (x > maxX) maxX = x;
+          if (y > maxY) maxY = y;
+          found = true;
+        }
+      }
+    }
+
+    if (!found) return;
+
+    // 2. Convert center of drawing to flow coordinates
+    const centerX = (minX + maxX) / 2 / dpr;
+    const centerY = (minY + maxY) / 2 / dpr;
+    const position = rfRef.current.screenToFlowPosition({ x: centerX, y: centerY });
+
+    // 3. Create the node
     const dataUrl = canvas.toDataURL("image/png");
-    const id = `resource-${Date.now()}`;
-    const position = getViewportCenterFlowPosition();
-    const data: GrimpoNodeData = {
-      title: "Sketch",
-      notes: `![Sketch](${dataUrl})`,
-      link: "",
+    const id = `sketch-${Date.now()}`;
+    const nodeWidth = (maxX - minX) / dpr;
+    const nodeHeight = (maxY - minY) / dpr;
+
+    const sketchData = {
+      image: dataUrl,
+      width: Math.max(50, nodeWidth),
+      height: Math.max(50, nodeHeight),
     };
 
-    setNodes((nds) => nds.concat({ id, type: "resource", position, data }));
+    setNodes((nds) => nds.concat({ 
+      id, 
+      type: "sketch", 
+      position, 
+      data: sketchData as any 
+    }));
+  }, [setNodes]);
 
-    // Clear the sketch layer
+  const clearSketch = useCallback(() => {
+    const canvas = sketchCanvasRef.current;
+    if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (ctx) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
     hasSketchRef.current = false;
-  }, [getViewportCenterFlowPosition, setNodes]);
+  }, []);
+
+  const finishDrawing = useCallback(() => {
+    saveSketchToResourceNode();
+    clearSketch();
+    handleAutoSave();
+    setIsDrawingMode(false);
+  }, [saveSketchToResourceNode, clearSketch, handleAutoSave]);
 
   const spawnThinkingPattern = useCallback(
     (args: { role: ThinkingRole; pattern: Exclude<ThinkingPattern, "blank"> }) => {
@@ -679,25 +736,25 @@ function ProjectContent({ id }: { id: string }) {
       }`}
     >
       {loadError && (
-        <div className="pointer-events-none absolute top-4 left-1/2 z-[120] -translate-x-1/2">
+        <div className="pointer-events-none absolute top-20 left-1/2 z-[120] -translate-x-1/2">
           <div
             className={[
-              "pointer-events-auto flex flex-col gap-2 rounded-2xl border p-4 backdrop-blur-md",
+              "pointer-events-auto flex flex-col gap-2 rounded-2xl border p-4 backdrop-blur-md w-[400px] max-w-[90vw]",
               theme === "surface"
                 ? "border-rose-300 bg-white/90 text-rose-700 shadow-md"
                 : "border-rose-300/25 bg-slate-950/70 text-rose-100 shadow-[0_0_24px_rgba(244,63,94,0.22)]",
             ].join(" ")}
           >
-            <div className="flex items-center gap-3 text-[11px]">
-              <span className="max-w-[60vw] font-bold">
-                {loadError.message === "Auth service unavailable"
+            <div className="flex items-center justify-between gap-3 text-[11px]">
+              <span className="font-bold">
+                {loadError.message === "Auth service unavailable" || loadError.message === "Database unavailable"
                   ? "Backend auth/db is unavailable (Neon timeout)."
                   : loadError.message}
               </span>
               <button
                 onClick={() => setReloadNonce((v) => v + 1)}
                 className={[
-                  "rounded-full border px-3 py-1 font-semibold transition-colors",
+                  "rounded-full border px-3 py-1 font-semibold transition-colors shrink-0",
                   theme === "surface"
                     ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
                     : "border-rose-300/20 bg-rose-500/10 text-rose-50 hover:bg-rose-500/15",
@@ -707,16 +764,18 @@ function ProjectContent({ id }: { id: string }) {
               </button>
             </div>
             {loadError.debug && (
-              <div className="mt-1 flex flex-col gap-1 text-[10px] opacity-80">
-                <div className="font-mono bg-black/20 p-2 rounded max-h-32 overflow-auto">
-                  {loadError.debug.message}
-                  {loadError.debug.cause && (
-                    <div className="mt-1 border-t border-white/10 pt-1 text-rose-300/80">
-                      Cause: {loadError.debug.cause}
+              <div className="mt-2 flex flex-col gap-1 text-[10px] opacity-90">
+                <div className="font-mono bg-black/40 p-3 rounded-lg border border-white/10 max-h-40 overflow-auto text-rose-200/90 break-all shadow-inner">
+                  {loadError.debug.message || "No error message available."}
+                  {(loadError.debug.cause || loadError.debug.causeMessage) && (
+                    <div className="mt-2 border-t border-white/10 pt-2 text-rose-300 font-bold">
+                      Cause: {loadError.debug.cause || loadError.debug.causeMessage}
                     </div>
                   )}
                 </div>
-                <div className="italic opacity-60">Check your DATABASE_URL and network connection.</div>
+                <div className="italic opacity-70 mt-1 text-center">
+                  Check your <code className="bg-white/10 px-1 rounded">DATABASE_URL</code> and connection.
+                </div>
               </div>
             )}
           </div>
@@ -902,9 +961,11 @@ function ProjectContent({ id }: { id: string }) {
                 instance.setViewport(initialViewportRef.current, { duration: 0 });
                 setViewport(initialViewportRef.current);
                 initialViewportRef.current = null;
+              } else {
+                // Only fit view if it's a fresh load with no saved viewport
+                instance.fitView({ padding: 0.2 });
               }
             }}
-            fitView
             proOptions={{ hideAttribution: true }}
             multiSelectionKeyCode="Shift"
           >
@@ -927,7 +988,7 @@ function ProjectContent({ id }: { id: string }) {
             }}
           />
 
-          <TemplateSpawner onSpawnPattern={spawnThinkingPattern} />
+          <TemplateSpawner theme={theme} onSpawnPattern={spawnThinkingPattern} />
         </>
       )}
 
@@ -1017,18 +1078,13 @@ function ProjectContent({ id }: { id: string }) {
           theme={theme}
           isDrawingMode={isDrawingMode}
           onToggleDrawingMode={() => setIsDrawingMode((v) => !v)}
-          onDoneDrawing={() => {
-            // Today, drawing is a UI mode toggle; this hook is intentionally where
-            // we persist the sketch layer.
-            saveSketchToResourceNode();
-            handleAutoSave();
-            setIsDrawingMode(false);
-          }}
+          onClearDrawing={clearSketch}
+          onDoneDrawing={finishDrawing}
           handleAddNode={handleAddNode}
         />
       )}
 
-      {!isBathysphereActive && (
+      {!isBathysphereActive && !isDrawingMode && (
       <div className="pointer-events-none absolute bottom-5 right-44 z-50">
         <button
           className={`pointer-events-auto rounded-full border px-4 py-2 text-xs backdrop-blur-md transition-all duration-300 disabled:opacity-50 ${
