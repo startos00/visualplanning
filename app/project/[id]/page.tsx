@@ -744,16 +744,39 @@ function ProjectContent({ id }: { id: string }) {
 
     if (!found) return;
 
-    // 2. Convert center of drawing to flow coordinates
-    const centerX = (minX + maxX) / 2 / dpr;
-    const centerY = (minY + maxY) / 2 / dpr;
-    const position = rfRef.current.screenToFlowPosition({ x: centerX, y: centerY });
-
-    // 3. Create the node
-    const dataUrl = canvas.toDataURL("image/png");
-    const id = `sketch-${Date.now()}`;
+    // 2. Crop the canvas to the bounding box
     const nodeWidth = (maxX - minX) / dpr;
     const nodeHeight = (maxY - minY) / dpr;
+    
+    const tempCanvas = document.createElement("canvas");
+    tempCanvas.width = maxX - minX;
+    tempCanvas.height = maxY - minY;
+    const tempCtx = tempCanvas.getContext("2d");
+    if (!tempCtx) return;
+
+    tempCtx.drawImage(
+      canvas,
+      minX,
+      minY,
+      maxX - minX,
+      maxY - minY,
+      0,
+      0,
+      maxX - minX,
+      maxY - minY
+    );
+
+    const dataUrl = tempCanvas.toDataURL("image/png");
+
+    // 3. Convert top-left of drawing to flow coordinates
+    const rect = canvas.getBoundingClientRect();
+    const position = rfRef.current.screenToFlowPosition({ 
+      x: rect.left + minX / dpr, 
+      y: rect.top + minY / dpr 
+    });
+
+    // 4. Create the node
+    const id = `sketch-${Date.now()}`;
 
     const sketchData = {
       image: dataUrl,
