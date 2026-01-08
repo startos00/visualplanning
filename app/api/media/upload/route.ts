@@ -5,13 +5,20 @@ import { auth } from "@/app/lib/auth";
 
 export const runtime = "nodejs";
 
-const MAX_PDF_BYTES = 100 * 1024 * 1024; // 100MB
+const MAX_FILE_BYTES = 100 * 1024 * 1024; // 100MB
+const ALLOWED_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+];
 
 export async function POST(request: Request) {
   try {
     if (!process.env.BLOB_READ_WRITE_TOKEN) {
       return NextResponse.json(
-        { error: "Missing BLOB_READ_WRITE_TOKEN in .env.local (required for PDF uploads)" },
+        { error: "Missing BLOB_READ_WRITE_TOKEN in .env.local (required for uploads)" },
         { status: 500 },
       );
     }
@@ -28,34 +35,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing file" }, { status: 400 });
     }
 
-    if (file.type !== "application/pdf") {
-      return NextResponse.json({ error: "Only PDF files are supported" }, { status: 400 });
-    }
-
-    if (file.size > MAX_PDF_BYTES) {
+    if (!ALLOWED_TYPES.includes(file.type)) {
       return NextResponse.json(
-        { error: `PDF is too large (max ${(MAX_PDF_BYTES / (1024 * 1024)).toFixed(0)}MB)` },
+        { error: "Only PDF and image files (JPG, PNG, WebP, GIF) are supported" },
         { status: 400 },
       );
     }
 
-    const safeName = (file.name || "document.pdf").replace(/[^\w.\-() ]+/g, "_");
-    const key = `pdfs/${session.user.id}/${Date.now()}-${safeName}`;
+    if (file.size > MAX_FILE_BYTES) {
+      return NextResponse.json(
+        { error: `File is too large (max ${(MAX_FILE_BYTES / (1024 * 1024)).toFixed(0)}MB)` },
+        { status: 400 },
+      );
+    }
+
+    const typeDir = file.type === "application/pdf" ? "pdfs" : "images";
+    const safeName = (file.name || "file").replace(/[^\w.\-() ]+/g, "_");
+    const key = `${typeDir}/${session.user.id}/${Date.now()}-${safeName}`;
 
     const blob = await put(key, file, {
       access: "public",
-      // contentType should be inferred, but keeping explicit is fine
-      contentType: "application/pdf",
+      contentType: file.type,
     });
 
     return NextResponse.json({
       blobUrl: blob.url,
       filename: safeName,
+      contentType: file.type,
     });
   } catch (error) {
-    console.error("PDF upload error:", error);
-    return NextResponse.json({ error: "Failed to upload PDF" }, { status: 500 });
+    console.error("Media upload error:", error);
+    return NextResponse.json({ error: "Failed to upload media" }, { status: 500 });
   }
 }
-
-

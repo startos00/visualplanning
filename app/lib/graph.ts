@@ -1,6 +1,6 @@
 import type { Edge, Node } from "reactflow";
 
-export type NodeKind = "strategy" | "tactical" | "resource" | "sketch";
+export type NodeKind = "strategy" | "tactical" | "resource" | "sketch" | "media" | "lightbox";
 export type ModeSetting = "auto" | "strategy" | "tactical";
 export type TacticalStatus = "todo" | "done";
 
@@ -11,6 +11,9 @@ export type GrimpoNodeData = {
   link?: string;
   pdfUrl?: string;
   videoUrl?: string;
+  imageUrl?: string;
+  imageOpacity?: number;
+  isLightbox?: boolean;
   // Tactical only:
   status?: TacticalStatus;
   // Visual customization:

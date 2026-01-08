@@ -580,6 +580,7 @@ function ProjectContent({ id }: { id: string }) {
         selected: selectedNodeIds.has(n.id),
         draggable: !n.data.locked,
         selectable: true,
+        zIndex: n.type === "lightbox" ? -1 : (n.type === "sketch" ? 100 : 0),
         className: isHighlighted ? `node-highlight node-highlight-${highlightedNodes.color}` : '',
         dragHandle: n.data.locked ? undefined : ".drag-handle",
         data: {
@@ -641,6 +642,76 @@ function ProjectContent({ id }: { id: string }) {
     },
     [addNode],
   );
+
+  const handleAddMedia = useCallback(async (mode: "media" | "lightbox") => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = mode === "lightbox" ? "image/*" : "image/*,application/pdf,video/*";
+    
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      try {
+        const res = await fetch("/api/media/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!res.ok) {
+          const body = await res.json();
+          alert(body.error || "Upload failed");
+          return;
+        }
+
+        const body = await res.json();
+        const kind = mode;
+        const id = `${kind}-${Date.now()}`;
+        const position = getViewportCenterFlowPosition();
+        
+        const data: GrimpoNodeData = {
+          title: file.name,
+          notes: "",
+        };
+
+        if (body.contentType.startsWith("image/")) {
+          data.imageUrl = body.blobUrl;
+          if (mode === "lightbox") {
+            data.imageOpacity = 0.5;
+            data.isLightbox = true;
+            data.locked = true; // Default locked for tracing
+          }
+        } else if (body.contentType === "application/pdf") {
+          data.pdfUrl = body.blobUrl;
+        }
+
+        const width = mode === "lightbox" ? 600 : 320;
+        const height = mode === "lightbox" ? 400 : 300;
+
+        setNodes((nds) => nds.concat({ 
+          id, 
+          type: kind, 
+          position, 
+          data,
+          width,
+          height,
+          style: { width, height }
+        }));
+
+        if (mode === "lightbox") {
+          setIsDrawingMode(true);
+        }
+      } catch (error) {
+        console.error("Media upload error:", error);
+        alert("Failed to upload media");
+      }
+    };
+
+    input.click();
+  }, [getViewportCenterFlowPosition, setNodes]);
 
   const saveSketchToResourceNode = useCallback(() => {
     const canvas = sketchCanvasRef.current;
@@ -1089,6 +1160,7 @@ function ProjectContent({ id }: { id: string }) {
           onColorChange={setPenColor}
           onDoneDrawing={finishDrawing}
           handleAddNode={handleAddNode}
+          handleAddMedia={handleAddMedia}
         />
       )}
 

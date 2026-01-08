@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { PencilLine, Sparkles, Target, Wrench } from "lucide-react";
+import { PencilLine, Sparkles, Target, Wrench, Image as ImageIcon, Layers } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type CreationDockProps = {
@@ -13,6 +13,7 @@ type CreationDockProps = {
   activeColor?: string;
   onColorChange?: (color: string) => void;
   handleAddNode: (type: "strategy" | "tactical" | "resource") => void;
+  handleAddMedia: (mode: "media" | "lightbox") => void;
 };
 
 const COLORS = [
@@ -32,6 +33,7 @@ export function CreationDock({
   activeColor = "#22d3ee",
   onColorChange,
   handleAddNode,
+  handleAddMedia,
 }: CreationDockProps) {
   const [open, setOpen] = useState(false);
 
@@ -105,6 +107,26 @@ export function CreationDock({
               >
                 <Sparkles className="h-4 w-4" />
                 Resource
+              </button>
+              <button
+                className={`flex items-center gap-2 rounded-2xl px-4 py-2 text-left text-sm transition-colors ${itemButtonClasses}`}
+                onClick={() => {
+                  handleAddMedia("media");
+                  setOpen(false);
+                }}
+              >
+                <ImageIcon className="h-4 w-4" />
+                Media
+              </button>
+              <button
+                className={`flex items-center gap-2 rounded-2xl px-4 py-2 text-left text-sm transition-colors ${itemButtonClasses}`}
+                onClick={() => {
+                  handleAddMedia("lightbox");
+                  setOpen(false);
+                }}
+              >
+                <Layers className="h-4 w-4" />
+                Lightbox
               </button>
             </motion.div>
           ) : null}
