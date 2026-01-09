@@ -11,9 +11,13 @@ type LightboxNodeData = GrimpoNodeData & {
   theme?: "abyss" | "surface";
   onUpdate?: (id: string, patch: Partial<GrimpoNodeData>) => void;
   onDelete?: (id: string) => void;
+  isTrace?: boolean;
+  sonarOpacity?: number;
 };
 
 export function LightboxNode({ id, data, selected }: NodeProps<LightboxNodeData>) {
+  const isTrace = !!data.isTrace;
+  const sonarOpacity = data.sonarOpacity ?? 0.2;
   const [swallowing, setSwallowing] = useState(false);
   const zoom = data.zoom ?? 1;
   const isSurface = data.theme === "surface";
@@ -25,11 +29,50 @@ export function LightboxNode({ id, data, selected }: NodeProps<LightboxNodeData>
     ? [
         "bg-white/95 shadow-md border-slate-200",
         selected ? "ring-2 ring-slate-400 ring-offset-2" : "",
+        isTrace ? "border-dashed pointer-events-none" : "",
       ].join(" ")
     : [
         "bg-slate-900/50 backdrop-blur-md border-cyan-300/20",
-        !selected && !swallowing && !isLocked ? "octo-breath" : "",
+        !selected && !swallowing && !isLocked && !isTrace ? "octo-breath" : "",
+        isTrace ? "border-dashed pointer-events-none" : "",
       ].join(" ");
+
+  if (isTrace) {
+    return (
+      <div 
+        className={[
+          "relative w-full h-full min-w-[300px] min-h-[200px] rounded-3xl border transition-all duration-300 overflow-hidden flex flex-col",
+          containerClasses,
+        ].join(" ")}
+        style={{
+          borderStyle: "dashed",
+          borderColor: `rgba(34, 211, 238, ${sonarOpacity})`,
+          backgroundColor: `rgba(34, 211, 238, ${sonarOpacity * 0.05})`,
+        }}
+      >
+        <div className="p-3 border-b border-cyan-500/10 flex items-center justify-between bg-black/10">
+          <span 
+            className="text-[10px] font-bold tracking-widest uppercase truncate"
+            style={{ color: `rgba(34, 211, 238, ${Math.max(sonarOpacity * 2, 0.4)})` }}
+          >
+            Lightbox Trace: {data.title}
+          </span>
+        </div>
+        <div 
+          className="relative flex-1 w-full h-full flex items-center justify-center p-4 overflow-hidden"
+          style={{ filter: 'grayscale(1) brightness(1.2)' }}
+        >
+          {data.imageUrl && (
+            <img
+              src={data.imageUrl}
+              alt={data.title}
+              className="max-w-full max-h-full w-auto h-auto object-contain pointer-events-none"
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
 
   const textPrimary = isSurface ? "text-slate-900" : "text-cyan-50";
   const textSecondary = isSurface ? "text-slate-500" : "text-cyan-200/90";

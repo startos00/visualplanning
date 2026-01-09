@@ -22,6 +22,8 @@ type GlassNodeData = GrimpoNodeData & {
   onTaskDone?: (id: string) => void;
   onBathysphereMode?: (nodeId: string, enabled: boolean) => void;
   onExtractTask?: (text: string, sourceNodeId: string) => void;
+  isTrace?: boolean;
+  sonarOpacity?: number;
 };
 
 // Color palette constants
@@ -95,6 +97,8 @@ function getYouTubeEmbedUrl(input: string): string | null {
 
 export function GlassNode(props: NodeProps<GlassNodeData>) {
   const { id, data, type, selected } = props;
+  const isTrace = !!data.isTrace;
+  const sonarOpacity = data.sonarOpacity ?? 0.2;
 
   const [swallowing, setSwallowing] = useState(false);
   const [localPdfPreviewUrl, setLocalPdfPreviewUrl] = useState<string | null>(null);
@@ -126,37 +130,39 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
 
   // Deadline and color logic
   const overdue = isOverdue(data.deadline);
-  const selectedColor = data.color || (isSurface ? "#94a3b8" : DEFAULT_COLOR);
+  const selectedColor = isTrace ? `rgba(34, 211, 238, ${sonarOpacity})` : (data.color || (isSurface ? "#94a3b8" : DEFAULT_COLOR));
   
   // Container styling
   const containerClasses = isSurface
     ? [
         "bg-white/95 shadow-md border-slate-200",
         selected ? "ring-2 ring-slate-400 ring-offset-2" : "",
+        isTrace ? "border-dashed pointer-events-none" : "",
       ].join(" ")
     : [
         "bg-slate-900/50 backdrop-blur-md",
-        !selected && !done && !swallowing ? "octo-breath" : "",
+        !selected && !done && !swallowing && !isTrace ? "octo-breath" : "",
+        isTrace ? "border-dashed pointer-events-none" : "",
       ].join(" ");
 
   const textPrimary = isSurface ? "text-slate-900" : "text-cyan-50";
   const textSecondary = isSurface ? "text-slate-500" : "text-cyan-200/90";
   const placeholderColor = isSurface ? "placeholder:text-slate-400" : "placeholder:text-cyan-200/40";
   const inputBg = isSurface ? "bg-slate-100/50" : "bg-slate-950/30";
-  const inputBorder = isSurface ? "border-slate-200" : "border-cyan-300/20";
+  const inputBorder = isTrace ? `rgba(34, 211, 238, ${sonarOpacity})` : (isSurface ? "border-slate-200" : "border-cyan-300/20");
 
   // Overdue takes priority: use red border, otherwise use selected color
-  const borderColor = overdue ? "#ef4444" : selectedColor;
-  const glowColor = overdue ? "#ef4444" : selectedColor;
+  const borderColor = isTrace ? `rgba(34, 211, 238, ${sonarOpacity})` : (overdue ? "#ef4444" : selectedColor);
+  const glowColor = isTrace ? `rgba(34, 211, 238, ${sonarOpacity * 0.5})` : (overdue ? "#ef4444" : selectedColor);
   // Increased glow intensity for better visibility, especially when zoomed out
   const isZoomedOut = zoom < 1;
   const baseIntensity = selected ? 0.9 : 0.7;
   const zoomedOutIntensity = selected ? 1.0 : 0.85;
-  const glowIntensity = isZoomedOut ? zoomedOutIntensity : baseIntensity;
+  const glowIntensity = isTrace ? sonarOpacity * 0.5 : (isZoomedOut ? zoomedOutIntensity : baseIntensity);
   // Increase spread when zoomed out for better visibility
   const baseSpread = selected ? "32px" : "24px";
   const zoomedOutSpread = selected ? "40px" : "32px";
-  const glowSpread = isZoomedOut ? zoomedOutSpread : baseSpread;
+  const glowSpread = isTrace ? "4px" : (isZoomedOut ? zoomedOutSpread : baseSpread);
 
   // Cleanup object URL when it changes or node unmounts.
   useEffect(() => {
@@ -359,19 +365,20 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
 
   // Build dynamic border and shadow styles
   const borderRgba = hexToRgba(borderColor, isSurface ? 0.8 : 0.3);
-  const glowRgba = hexToRgba(glowColor, glowIntensity);
+  const glowRgba = isTrace ? `rgba(34, 211, 238, ${glowIntensity})` : hexToRgba(glowColor, glowIntensity);
   const borderStyle = { 
-    borderColor: isSurface && data.color ? borderColor : borderRgba,
-    borderWidth: isSurface && data.color ? '2px' : '1px'
+    borderColor: isTrace ? `rgba(34, 211, 238, ${sonarOpacity})` : (isSurface && data.color ? borderColor : borderRgba),
+    borderWidth: isTrace ? '1px' : (isSurface && data.color ? '2px' : '1px'),
+    borderStyle: isTrace ? 'dashed' as const : 'solid' as const,
   };
   
-  const surfaceBgStyle = isSurface && data.color 
+  const surfaceBgStyle = isTrace ? { backgroundColor: `rgba(34, 211, 238, ${sonarOpacity * 0.15})` } : (isSurface && data.color 
     ? { backgroundColor: hexToRgba(selectedColor, 0.05) } 
-    : {};
+    : {});
 
-  const shadowStyle = isSurface 
+  const shadowStyle = isTrace ? { boxShadow: 'none' } : (isSurface 
     ? { boxShadow: selected ? `0 0 20px rgba(0,0,0,0.1)` : '0 4px 6px -1px rgb(0 0 0 / 0.1)' }
-    : { boxShadow: `0 0 ${glowSpread} ${glowRgba}` };
+    : { boxShadow: `0 0 ${glowSpread} ${glowRgba}` });
 
   const handleDoubleClick = () => {
     if (type === "resource" && data.pdfUrl && data.pdfUrl.trim()) {
@@ -428,83 +435,91 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
         )}
 
         {/* sheen (Abyss only) */}
-        {!isSurface && (
+        {!isSurface && !isTrace && (
           <div className="pointer-events-none absolute inset-0 rounded-[22px] bg-gradient-to-b from-white/10 to-transparent" />
         )}
 
-        <Handle
-          type="target"
-          position={Position.Left}
-          className={`${handleClass} !left-0 !top-1/2 !translate-x-[-50%] !translate-y-[-50%]`}
-          style={handleStyleAttr}
-        />
-        <Handle
-          type="source"
-          position={Position.Right}
-          className={`${handleClass} !right-0 !top-1/2 !translate-x-[50%] !translate-y-[-50%]`}
-          style={handleStyleAttr}
-        />
+        {!isTrace && (
+          <>
+            <Handle
+              type="target"
+              position={Position.Left}
+              className={`${handleClass} !left-0 !top-1/2 !translate-x-[-50%] !translate-y-[-50%]`}
+              style={handleStyleAttr}
+            />
+            <Handle
+              type="source"
+              position={Position.Right}
+              className={`${handleClass} !right-0 !top-1/2 !translate-x-[50%] !translate-y-[-50%]`}
+              style={handleStyleAttr}
+            />
+          </>
+        )}
 
-        <div className="relative p-4 drag-handle cursor-grab active:cursor-grabbing">
+        <div className={`relative p-4 ${isTrace ? "" : "drag-handle cursor-grab active:cursor-grabbing"}`}>
           <div className="mb-3 flex items-center justify-between gap-3 pointer-events-none">
-            <div className={`flex items-center gap-2 text-xs tracking-widest ${isSurface && data.color ? '' : textSecondary}`}>
-              <badge.Icon className={`h-4 w-4 ${isSurface && data.color ? '' : textSecondary}`} style={isSurface && data.color ? { color: selectedColor } : {}} />
+            <div className={`flex items-center gap-2 text-xs tracking-widest ${isSurface && data.color ? '' : textSecondary} ${isTrace ? "opacity-50" : ""}`}>
+              {badge && <badge.Icon className={`h-4 w-4 ${isSurface && data.color ? '' : textSecondary}`} style={isSurface && data.color ? { color: selectedColor } : {}} />}
               <span 
                 className={`rounded-full border px-2 py-1 transition-colors ${inputBorder} ${inputBg}`}
-                style={isSurface && data.color ? { 
+                style={isSurface && data.color && !isTrace ? { 
                   backgroundColor: hexToRgba(selectedColor, 0.15),
                   borderColor: hexToRgba(selectedColor, 0.3),
                   color: selectedColor,
                   fontWeight: 'bold'
                 } : {}}
               >
-                {badge.label}
+                {badge?.label} {isTrace && "(Trace)"}
               </span>
             </div>
-            <div className="flex items-center gap-2 pointer-events-auto">
-              <div className="relative flex items-center">
-                <input
-                  type="date"
-                  value={data.deadline ?? ""}
-                  onChange={(e) => {
-                    const value = e.target.value || undefined;
-                    data.onUpdate?.(id, { deadline: value });
-                  }}
-                  className={`h-7 rounded-full border ${inputBorder} ${inputBg} px-3 text-[10px] ${isSurface ? 'text-slate-700' : 'text-cyan-50/80'} outline-none transition-all hover:opacity-80 focus:ring-1 focus:ring-cyan-300/20`}
-                  title="Set deadline"
-                />
+            {!isTrace && (
+              <div className="flex items-center gap-2 pointer-events-auto">
+                <div className="relative flex items-center">
+                  <input
+                    type="date"
+                    value={data.deadline ?? ""}
+                    onChange={(e) => {
+                      const value = e.target.value || undefined;
+                      data.onUpdate?.(id, { deadline: value });
+                    }}
+                    className={`h-7 rounded-full border ${inputBorder} ${inputBg} px-3 text-[10px] ${isSurface ? 'text-slate-700' : 'text-cyan-50/80'} outline-none transition-all hover:opacity-80 focus:ring-1 focus:ring-cyan-300/20`}
+                    title="Set deadline"
+                  />
+                </div>
+                {type === "resource" && !titleOnly && data.link ? (
+                  <button
+                    onClick={() => window.open(data.link, "_blank", "noopener,noreferrer")}
+                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs transition-colors ${
+                      isSurface 
+                        ? "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200" 
+                        : "border-rose-300/20 bg-rose-500/10 text-rose-200 shadow-[0_0_14px_rgba(244,63,94,0.18)] hover:bg-rose-500/20"
+                    }`}
+                    title="Open link"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    Open
+                  </button>
+                ) : null}
               </div>
-              {type === "resource" && !titleOnly && data.link ? (
-                <button
-                  onClick={() => window.open(data.link, "_blank", "noopener,noreferrer")}
-                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs transition-colors ${
-                    isSurface 
-                      ? "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200" 
-                      : "border-rose-300/20 bg-rose-500/10 text-rose-200 shadow-[0_0_14px_rgba(244,63,94,0.18)] hover:bg-rose-500/20"
-                  }`}
-                  title="Open link"
-                >
-                  <ExternalLink className="h-3 w-3" />
-                  Open
-                </button>
-              ) : null}
-            </div>
+            )}
           </div>
 
           <input
             value={data.title ?? ""}
             onChange={(e) => data.onUpdate?.(id, { title: e.target.value })}
             placeholder="Title…"
+            readOnly={isTrace}
             className={[
               "w-full bg-transparent font-semibold outline-none transition-colors",
               textPrimary,
               placeholderColor,
               titleOnly ? "text-2xl" : "text-lg",
               isSurface ? "font-bold" : "font-semibold",
+              isTrace ? "pointer-events-none" : "",
             ].join(" ")}
           />
 
-          {!titleOnly ? (
+          {!titleOnly && !isTrace ? (
             <div className="mt-3 space-y-3">
               {type === "resource" ? (
                 <div className="space-y-2">

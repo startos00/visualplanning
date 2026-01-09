@@ -13,7 +13,7 @@ type MascotAgentPanelProps = {
   theme?: "abyss" | "surface";
   onAppend: (message: { role: "user"; content: string }) => void;
   onOpenResourceChamber: () => void;
-  dragConstraints?: React.RefObject<HTMLDivElement>;
+  dragConstraints?: React.RefObject<HTMLDivElement | null>;
   activeMascot: MascotVariant | null;
   onActiveMascotChange: (agent: MascotVariant | null) => void;
 };

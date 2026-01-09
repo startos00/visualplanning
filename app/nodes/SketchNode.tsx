@@ -11,13 +11,36 @@ export type SketchNodeData = {
   width: number;
   height: number;
   locked?: boolean;
+  isTrace?: boolean;
+  sonarOpacity?: number;
   onUpdate?: (id: string, patch: Partial<SketchNodeData>) => void;
   onDelete?: (id: string) => void;
 };
 
 export function SketchNode({ id, data, selected }: NodeProps<SketchNodeData>) {
+  const isTrace = !!data.isTrace;
+  const sonarOpacity = data.sonarOpacity ?? 0.2;
   const [hovered, setHovered] = useState(false);
   const isLocked = !!data.locked;
+
+  if (isTrace) {
+    return (
+      <div 
+        className="w-full h-full rounded-2xl border border-dashed flex items-center justify-center pointer-events-none"
+        style={{
+          borderColor: `rgba(34, 211, 238, ${sonarOpacity})`,
+          backgroundColor: `rgba(34, 211, 238, ${sonarOpacity * 0.1})`,
+        }}
+      >
+        <span 
+          className="text-[10px] font-bold tracking-widest uppercase"
+          style={{ color: `rgba(34, 211, 238, ${sonarOpacity * 2})` }}
+        >
+          Sketch Trace
+        </span>
+      </div>
+    );
+  }
 
   return (
     <>

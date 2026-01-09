@@ -35,6 +35,7 @@ import { SurfaceButton } from "@/app/components/auth/SurfaceButton";
 import { DecompressionOverlay } from "@/app/components/auth/DecompressionOverlay";
 import { FloatingControlBar } from "@/app/components/FloatingControlBar";
 import { SonarArray } from "@/app/components/SonarArray";
+import { SonarOverlay } from "@/app/components/SonarOverlay";
 import { DumbyReader } from "@/app/components/DumbyReader";
 import { AgentChat } from "@/app/components/AgentChat";
 import { MascotAgentPanel } from "@/app/components/MascotAgentPanel";
@@ -211,6 +212,9 @@ function ProjectContent({ id }: { id: string }) {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "auth-required">("idle");
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
   const [sonarArrayOpen, setSonarArrayOpen] = useState(false);
+  const [activeSonarId, setActiveSonarId] = useState<string | null>(null);
+  const [sonarOpacity, setSonarOpacity] = useState(0.2);
+  const [activeCanvasOpacity, setActiveCanvasOpacity] = useState(1);
   const [bathysphereNodeId, setBathysphereNodeId] = useState<string | null>(null);
   const [highlightedNodes, setHighlightedNodes] = useState<{ nodeIds: string[]; color: string; }>({ nodeIds: [], color: '' });
   const [currentAgent, setCurrentAgent] = useState<MascotVariant>("dumbo");
@@ -383,7 +387,9 @@ function ProjectContent({ id }: { id: string }) {
     setSaveStatus("saving");
 
     saveTimeoutRef.current = setTimeout(async () => {
-      const cleanNodes = JSON.parse(JSON.stringify(nodes));
+      // Filter out trace nodes before saving
+      const persistentNodes = nodes.filter(n => !n.data.isTrace);
+      const cleanNodes = JSON.parse(JSON.stringify(persistentNodes));
       const cleanEdges = JSON.parse(JSON.stringify(edges));
 
       // #region agent log
@@ -530,6 +536,67 @@ function ProjectContent({ id }: { id: string }) {
     setBathysphereNodeId(enabled ? nodeId : null);
   }, []);
 
+  const handleSelectSonarProject = useCallback(async (projectId: string | null) => {
+    // 1. Remove existing trace nodes and edges
+    setNodes((nds) => nds.filter((n) => !n.data.isTrace));
+    setEdges((eds) => eds.filter((e) => !e.data?.isTrace));
+    
+    setActiveSonarId(projectId);
+    if (!projectId) {
+      setActiveCanvasOpacity(1); // Reset current project visibility when sonar is cleared
+      return;
+    }
+
+    // 2. Fetch data for the sonar project
+    const result = await getProjectData(projectId);
+    if (result.error || !result.nodes) return;
+
+    // 3. Prepare trace nodes
+    const traceNodes = result.nodes.map((n: GrimpoNode) => ({
+      ...n,
+      id: `${n.id}-trace`,
+      draggable: false,
+      selectable: false,
+      data: {
+        ...n.data,
+        isTrace: true,
+      },
+    }));
+
+    // 4. Prepare trace edges
+    const traceEdges = (result.edges || []).map((e: any) => ({
+      ...e,
+      id: `${e.id}-trace`,
+      data: { isTrace: true },
+      animated: false,
+      style: {
+        ...e.style,
+        stroke: "rgba(34, 211, 238, 0.2)",
+        strokeDasharray: "5,5",
+      },
+    }));
+
+    // 5. Inject trace nodes and edges
+    setNodes((nds) => [...nds, ...traceNodes]);
+    setEdges((eds) => [...eds, ...traceEdges]);
+  }, [setNodes, setEdges]);
+
+  const handleShiftSonar = useCallback((dx: number, dy: number) => {
+    setNodes((nds) =>
+      nds.map((n) =>
+        n.data.isTrace
+          ? {
+              ...n,
+              position: {
+                x: n.position.x + dx,
+                y: n.position.y + dy,
+              },
+            }
+          : n
+      )
+    );
+  }, [setNodes]);
+
   const getViewportCenterFlowPosition = useCallback(() => {
     const rect = wrapperRef.current?.getBoundingClientRect();
     if (rect && rfRef.current?.screenToFlowPosition) {
@@ -573,32 +640,58 @@ function ProjectContent({ id }: { id: string }) {
 
   const viewNodes = useMemo(() => {
     return nodes.map((n) => {
+      const isTrace = !!n.data.isTrace;
       const isHighlighted = highlightedNodes.nodeIds.includes(n.id);
+      const currentOpacity = isTrace ? sonarOpacity : activeCanvasOpacity;
+      
       return {
         ...n,
-        hidden: effectiveMode === "strategy" && n.type === "tactical",
-        selected: selectedNodeIds.has(n.id),
-        draggable: !n.data.locked,
-        selectable: true,
-        zIndex: n.type === "lightbox" ? -1 : (n.type === "sketch" ? 100 : 0),
+        hidden: !isTrace && effectiveMode === "strategy" && n.type === "tactical",
+        selected: !isTrace && selectedNodeIds.has(n.id),
+        draggable: !isTrace && !n.data.locked,
+        selectable: !isTrace,
+        zIndex: isTrace ? -1 : (n.type === "lightbox" ? -1 : (n.type === "sketch" ? 100 : 0)),
         className: isHighlighted ? `node-highlight node-highlight-${highlightedNodes.color}` : '',
-        dragHandle: n.data.locked ? undefined : ".drag-handle",
+        dragHandle: (isTrace || n.data.locked) ? undefined : ".drag-handle",
+        style: {
+          ...n.style,
+          opacity: currentOpacity,
+          transition: 'opacity 0.2s ease-in-out',
+        },
         data: {
           ...n.data,
           zoom: viewport.zoom,
           mode: effectiveMode,
           theme,
-          onUpdate: onUpdateNode,
-          onDelete: onDeleteNode,
-          onTaskDone: onTaskDone,
-          onBathysphereMode: handleBathysphereMode,
-          onExtractTask: onExtractTask,
+          onUpdate: isTrace ? undefined : onUpdateNode,
+          onDelete: isTrace ? undefined : onDeleteNode,
+          onTaskDone: isTrace ? undefined : onTaskDone,
+          onBathysphereMode: isTrace ? undefined : handleBathysphereMode,
+          onExtractTask: isTrace ? undefined : onExtractTask,
+          isTrace,
+          sonarOpacity: currentOpacity,
           isHighlighted,
           highlightColor: isHighlighted ? highlightedNodes.color : null,
         },
       };
     });
-  }, [effectiveMode, nodes, onDeleteNode, onTaskDone, onUpdateNode, viewport.zoom, selectedNodeIds, handleBathysphereMode, onExtractTask, highlightedNodes, theme]);
+  }, [effectiveMode, nodes, onDeleteNode, onTaskDone, onUpdateNode, viewport.zoom, selectedNodeIds, handleBathysphereMode, onExtractTask, highlightedNodes, theme, sonarOpacity, activeCanvasOpacity]);
+
+  const viewEdges = useMemo(() => {
+    return edges.map((e) => {
+      const isTrace = !!e.data?.isTrace;
+      const currentOpacity = isTrace ? sonarOpacity : activeCanvasOpacity;
+      
+      return {
+        ...e,
+        style: {
+          ...e.style,
+          opacity: currentOpacity,
+          transition: 'opacity 0.2s ease-in-out',
+        },
+      };
+    });
+  }, [edges, sonarOpacity, activeCanvasOpacity]);
 
   const defaultEdgeOptions: DefaultEdgeOptions = useMemo(
     () => ({
@@ -1038,7 +1131,7 @@ function ProjectContent({ id }: { id: string }) {
         <>
           <ReactFlow
             nodes={viewNodes}
-            edges={edges}
+            edges={viewEdges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
@@ -1164,6 +1257,19 @@ function ProjectContent({ id }: { id: string }) {
           >
             GARDEN
           </button>
+
+          <SonarOverlay
+            projects={allProjects}
+            currentProjectId={id}
+            activeSonarId={activeSonarId}
+            onSelectProject={handleSelectSonarProject}
+            onShiftSonar={handleShiftSonar}
+            sonarOpacity={sonarOpacity}
+            onOpacityChange={setSonarOpacity}
+            activeCanvasOpacity={activeCanvasOpacity}
+            onActiveCanvasOpacityChange={setActiveCanvasOpacity}
+            theme={theme}
+          />
         </div>
         <div className={`pointer-events-none text-xs transition-colors duration-300 ${
           theme === 'surface' ? 'text-slate-500' : 'text-cyan-100/60'

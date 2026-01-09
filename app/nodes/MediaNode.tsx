@@ -13,6 +13,8 @@ type MediaNodeData = GrimpoNodeData & {
   onUpdate?: (id: string, patch: Partial<GrimpoNodeData>) => void;
   onDelete?: (id: string) => void;
   onBathysphereMode?: (nodeId: string, enabled: boolean) => void;
+  isTrace?: boolean;
+  sonarOpacity?: number;
 };
 
 function getYouTubeEmbedUrl(input: string): string | null {
@@ -41,6 +43,8 @@ function getYouTubeEmbedUrl(input: string): string | null {
 }
 
 export function MediaNode({ id, data, selected }: NodeProps<MediaNodeData>) {
+  const isTrace = !!data.isTrace;
+  const sonarOpacity = data.sonarOpacity ?? 0.2;
   const [swallowing, setSwallowing] = useState(false);
   const zoom = data.zoom ?? 1;
   const isSurface = data.theme === "surface";
@@ -50,16 +54,18 @@ export function MediaNode({ id, data, selected }: NodeProps<MediaNodeData>) {
     ? [
         "bg-white/95 shadow-md border-slate-200",
         selected ? "ring-2 ring-slate-400 ring-offset-2" : "",
+        isTrace ? "border-dashed pointer-events-none" : "",
       ].join(" ")
     : [
         "bg-slate-900/50 backdrop-blur-md border-cyan-300/20",
-        !selected && !swallowing && !isLocked ? "octo-breath" : "",
+        !selected && !swallowing && !isLocked && !isTrace ? "octo-breath" : "",
+        isTrace ? "border-dashed pointer-events-none" : "",
       ].join(" ");
 
   const textPrimary = isSurface ? "text-slate-900" : "text-cyan-50";
   const textSecondary = isSurface ? "text-slate-500" : "text-cyan-200/90";
   const inputBg = isSurface ? "bg-slate-100/50" : "bg-slate-950/30";
-  const inputBorder = isSurface ? "border-slate-200" : "border-cyan-300/20";
+  const inputBorder = isTrace ? `rgba(34, 211, 238, ${sonarOpacity})` : (isSurface ? "border-slate-200" : "border-cyan-300/20");
 
   const handleClass = isSurface
     ? "!h-4 !w-4 !border-2 !border-white !bg-slate-400"
@@ -202,75 +208,88 @@ export function MediaNode({ id, data, selected }: NodeProps<MediaNodeData>) {
           swallowing ? "scale-0 opacity-0" : "",
         ].join(" ")}
         style={{
-          boxShadow: !isSurface ? `0 0 20px rgba(34,211,238,0.3)` : undefined,
+          boxShadow: !isSurface && !isTrace ? `0 0 20px rgba(34,211,238,0.3)` : undefined,
+          borderStyle: isTrace ? "dashed" : "solid",
+          borderColor: isTrace ? `rgba(34, 211, 238, ${sonarOpacity})` : undefined,
         }}
       >
-        <Handle
-          type="target"
-          position={Position.Left}
-          className={`${handleClass} !left-0 !top-1/2 !translate-x-[-50%] !translate-y-[-50%]`}
-          style={handleStyleAttr}
-        />
-        <Handle
-          type="source"
-          position={Position.Right}
-          className={`${handleClass} !right-0 !top-1/2 !translate-x-[50%] !translate-y-[-50%]`}
-          style={handleStyleAttr}
-        />
+        {!isTrace && (
+          <>
+            <Handle
+              type="target"
+              position={Position.Left}
+              className={`${handleClass} !left-0 !top-1/2 !translate-x-[-50%] !translate-y-[-50%]`}
+              style={handleStyleAttr}
+            />
+            <Handle
+              type="source"
+              position={Position.Right}
+              className={`${handleClass} !right-0 !top-1/2 !translate-x-[50%] !translate-y-[-50%]`}
+              style={handleStyleAttr}
+            />
+          </>
+        )}
 
-        <div className={`relative p-4 h-full flex flex-col ${!isLocked ? "drag-handle cursor-grab active:cursor-grabbing" : "cursor-default"}`}>
+        <div className={`relative p-4 h-full flex flex-col ${!isLocked && !isTrace ? "drag-handle cursor-grab active:cursor-grabbing" : "cursor-default"}`}>
           <div className="mb-3 flex items-center justify-between gap-3">
-            <div className={`flex items-center gap-2 text-xs tracking-widest ${textSecondary} pointer-events-none`}>
+            <div className={`flex items-center gap-2 text-xs tracking-widest ${textSecondary} pointer-events-none ${isTrace ? "opacity-50" : ""}`}>
               <badge.Icon className="h-4 w-4" />
               <span className={`rounded-full border px-2 py-1 ${inputBorder} ${inputBg}`}>
-                {badge.label}
+                {badge.label} {isTrace && "(Trace)"}
               </span>
             </div>
-            <div className="flex items-center gap-1 nodrag z-[60]">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  data.onUpdate?.(id, { locked: !isLocked });
-                }}
-                className={`p-1.5 rounded-full border transition-colors ${
-                  isLocked 
-                    ? "bg-amber-500/20 text-amber-200 border-amber-500/30 hover:bg-amber-500" 
-                    : "bg-slate-800/40 text-cyan-200 border-cyan-500/30 hover:bg-slate-700"
-                }`}
-                title={isLocked ? "Unlock node" : "Lock node position"}
-              >
-                {isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSwallowing(true);
-                  setTimeout(() => data.onDelete?.(id), 220);
-                }}
-                className="text-rose-400/60 hover:text-rose-400 p-1 transition-colors"
-                title="Delete media node"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+            {!isTrace && (
+              <div className="flex items-center gap-1 nodrag z-[60]">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    data.onUpdate?.(id, { locked: !isLocked });
+                  }}
+                  className={`p-1.5 rounded-full border transition-colors ${
+                    isLocked 
+                      ? "bg-amber-500/20 text-amber-200 border-amber-500/30 hover:bg-amber-500" 
+                      : "bg-slate-800/40 text-cyan-200 border-cyan-500/30 hover:bg-slate-700"
+                  }`}
+                  title={isLocked ? "Unlock node" : "Lock node position"}
+                >
+                  {isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSwallowing(true);
+                    setTimeout(() => data.onDelete?.(id), 220);
+                  }}
+                  className="text-rose-400/60 hover:text-rose-400 p-1 transition-colors"
+                  title="Delete media node"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
           </div>
 
           <input
             value={data.title ?? ""}
             onChange={(e) => data.onUpdate?.(id, { title: e.target.value })}
             placeholder="Media title…"
+            readOnly={isTrace}
             className={[
               "w-full bg-transparent font-semibold outline-none transition-colors mb-3 nodrag z-[60]",
               textPrimary,
               "text-lg",
+              isTrace ? "pointer-events-none" : "",
             ].join(" ")}
           />
 
-          <div className="flex-1 overflow-hidden min-h-0">
+          <div 
+            className="flex-1 overflow-hidden min-h-0"
+            style={isTrace ? { filter: 'grayscale(1) brightness(1.2) contrast(0.8)' } : {}}
+          >
             {renderContent()}
           </div>
 
-          {data.notes && (
+          {data.notes && !isTrace && (
             <div className={`mt-3 text-sm ${textSecondary} line-clamp-3 nodrag z-[60]`}>
               {data.notes}
             </div>
