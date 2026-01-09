@@ -73,7 +73,7 @@ export async function POST(request: Request) {
 
     let systemPrompt = "";
     let shouldExecuteToolFirst = false;
-    let queryType: "overdue" | "today" | "upcoming" | "all" | null = null;
+    let queryType: "overdue" | "today" | "tomorrow" | "upcoming" | "all" | null = null;
 
     if (agent === "dumbo") {
       systemPrompt = `You are Dumbo, an eager Dumbo Octopus intern in the Abyssal Zone 🐙! You love helping with small tasks and you speak cheerfully with aquatic puns and emojis (e.g., 🌊, ✨). 
@@ -190,23 +190,23 @@ export async function POST(request: Request) {
       let highlightColor = "cyan";
       
       switch (queryType) {
-        case "overdue" as any:
+        case "overdue":
           nodeIdsToHighlight = deadlineResults.overdue.map(t => t.id);
           highlightColor = "red";
           break;
-        case "today" as any:
+        case "today":
           nodeIdsToHighlight = deadlineResults.today.map(t => t.id);
           highlightColor = "yellow";
           break;
-        case "tomorrow" as any:
+        case "tomorrow":
           nodeIdsToHighlight = deadlineResults.tomorrow.map(t => t.id);
           highlightColor = "blue"; // Using blue for tomorrow as well
           break;
-        case "upcoming" as any:
+        case "upcoming":
           nodeIdsToHighlight = deadlineResults.upcoming.map(t => t.id);
           highlightColor = "blue";
           break;
-        case "all" as any:
+        case "all":
           nodeIdsToHighlight = [
             ...deadlineResults.overdue.map(t => t.id),
             ...deadlineResults.today.map(t => t.id),
