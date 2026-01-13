@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Maximize2, Image as ImageIcon, FileText, Video, Lock, Unlock } from "lucide-react";
+import { X, Maximize2, Image as ImageIcon, FileText, Video, Lock, Unlock, Eye } from "lucide-react";
 import type { NodeProps } from "reactflow";
 import { Handle, Position, NodeResizer } from "reactflow";
 import type { GrimpoNodeData } from "@/app/lib/graph";
@@ -13,6 +13,8 @@ type MediaNodeData = GrimpoNodeData & {
   onUpdate?: (id: string, patch: Partial<GrimpoNodeData>) => void;
   onDelete?: (id: string) => void;
   onBathysphereMode?: (nodeId: string, enabled: boolean) => void;
+  onOpenMindsEye?: (nodeId: string) => void;
+  onOpenMindMap?: (nodeId: string) => void;
   isTrace?: boolean;
   sonarOpacity?: number;
 };
@@ -88,8 +90,34 @@ export function MediaNode({ id, data, selected }: NodeProps<MediaNodeData>) {
           />
           <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity nodrag z-[60]">
             <button
-              onClick={() => data.onUpdate?.(id, { imageUrl: "" })}
+              onClick={(e) => {
+                e.stopPropagation();
+                data.onOpenMindsEye?.(id);
+              }}
+              disabled={!data.imageUrl}
+              className="bg-black/50 hover:bg-black/70 text-white p-1 rounded-full transition-colors disabled:opacity-40"
+              title="Mind’s Eye (analyze image)"
+            >
+              <Eye className="h-3 w-3" />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                data.onOpenMindMap?.(id);
+              }}
+              disabled={!data.imageUrl}
+              className="bg-black/50 hover:bg-black/70 text-white px-2 py-1 rounded-full text-[10px] font-bold tracking-widest transition-colors disabled:opacity-40"
+              title="Mind Map (analyze image)"
+            >
+              MAP
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                data.onUpdate?.(id, { imageUrl: "" });
+              }}
               className="bg-black/50 hover:bg-black/70 text-white p-1 rounded-full transition-colors"
+              title="Remove image"
             >
               <X className="h-3 w-3" />
             </button>

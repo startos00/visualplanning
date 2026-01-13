@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Layers, Image as ImageIcon, Lock, Unlock } from "lucide-react";
+import { X, Layers, Image as ImageIcon, Lock, Unlock, Eye } from "lucide-react";
 import type { NodeProps } from "reactflow";
 import { NodeResizer } from "reactflow";
 import type { GrimpoNodeData } from "@/app/lib/graph";
@@ -11,6 +11,8 @@ type LightboxNodeData = GrimpoNodeData & {
   theme?: "abyss" | "surface";
   onUpdate?: (id: string, patch: Partial<GrimpoNodeData>) => void;
   onDelete?: (id: string) => void;
+  onOpenMindsEye?: (nodeId: string) => void;
+  onOpenMindMap?: (nodeId: string) => void;
   isTrace?: boolean;
   sonarOpacity?: number;
 };
@@ -122,6 +124,30 @@ export function LightboxNode({ id, data, selected }: NodeProps<LightboxNodeData>
           </div>
 
           <div className="flex items-center gap-1 nodrag">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!data.imageUrl) return;
+                data.onOpenMindsEye?.(id);
+              }}
+              disabled={!data.imageUrl}
+              className="p-1.5 rounded-full border border-cyan-500/30 bg-slate-800/40 text-cyan-200 hover:bg-slate-700 transition-colors disabled:opacity-40"
+              title={data.imageUrl ? "Mind’s Eye (analyze image)" : "Add an image to use Mind’s Eye"}
+            >
+              <Eye className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!data.imageUrl) return;
+                data.onOpenMindMap?.(id);
+              }}
+              disabled={!data.imageUrl}
+              className="px-2 py-1.5 rounded-full border border-cyan-500/30 bg-slate-800/40 text-cyan-200 hover:bg-slate-700 transition-colors disabled:opacity-40 text-[10px] font-bold tracking-widest"
+              title={data.imageUrl ? "Mind Map (analyze image)" : "Add an image to use Mind Map"}
+            >
+              MAP
+            </button>
             <button
               onClick={(e) => {
                 e.stopPropagation();

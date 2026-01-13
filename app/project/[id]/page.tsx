@@ -37,11 +37,14 @@ import { FloatingControlBar } from "@/app/components/FloatingControlBar";
 import { SonarArray } from "@/app/components/SonarArray";
 import { SonarOverlay } from "@/app/components/SonarOverlay";
 import { DumbyReader } from "@/app/components/DumbyReader";
+import { MindsEyeModal, type MindsEyePlan } from "@/app/components/MindsEyeModal";
+import { MindMapModal, type MindMapGraph } from "@/app/components/MindMapModal";
 import { AgentChat } from "@/app/components/AgentChat";
 import { MascotAgentPanel } from "@/app/components/MascotAgentPanel";
 import { CreationDock } from "@/app/components/CreationDock";
 import type { GrimpoNode } from "@/app/lib/graph";
-import { useChat } from "@ai-sdk/react";
+import { useChat, Chat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
 
 // Define these outside the component to prevent re-creation on every render
 const memoizedNodeTypes = nodeTypes;
@@ -223,6 +226,12 @@ function ProjectContent({ id }: { id: string }) {
   const [penColor, setPenColor] = useState("#22d3ee");
   const sketchCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const hasSketchRef = useRef(false);
+  const [mindsEyeOpen, setMindsEyeOpen] = useState(false);
+  const [mindsEyeSourceNodeId, setMindsEyeSourceNodeId] = useState<string | null>(null);
+  const [mindsEyeImageUrl, setMindsEyeImageUrl] = useState<string | null>(null);
+  const [mindMapOpen, setMindMapOpen] = useState(false);
+  const [mindMapSourceNodeId, setMindMapSourceNodeId] = useState<string | null>(null);
+  const [mindMapImageUrl, setMindMapImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     // #region agent log
@@ -265,13 +274,32 @@ function ProjectContent({ id }: { id: string }) {
   const [input, setInput] = useState("");
   const [chatData, setChatData] = useState<any[]>([]);
 
+  // Refs for transport
+  const currentAgentRef = useRef(currentAgent);
+  const projectIdRef = useRef(id);
+
+  useEffect(() => {
+    currentAgentRef.current = currentAgent;
+  }, [currentAgent]);
+
+  useEffect(() => {
+    projectIdRef.current = id;
+  }, [id]);
+
+  const [chat] = useState(() => {
+    const transport = new DefaultChatTransport({
+      api: "/api/chat",
+      body: () => ({
+        agent: currentAgentRef.current,
+        userDateTime: new Date().toISOString(),
+        projectId: projectIdRef.current,
+      }),
+    });
+    return new Chat({ transport });
+  });
+
   const { messages, setMessages, sendMessage, status, error: chatError, stop } = useChat({
-    api: "/api/chat",
-    body: {
-      agent: currentAgent,
-      userDateTime: new Date().toISOString(),
-      projectId: id, // Pass projectId to chat
-    },
+    chat,
     onData: (data) => {
       setChatData(prev => [...prev, data]);
     }
@@ -279,14 +307,20 @@ function ProjectContent({ id }: { id: string }) {
 
   const isLoading = status === "submitted" || status === "streaming";
 
-  const append = useCallback(async (message: { role: "user"; content: string }) => {
-    await sendMessage(message);
+  const append = useCallback(async (message: { role: "user" | "assistant" | "system"; content: string }): Promise<string | null | undefined> => {
+    // AI SDK UI messages in this app use parts-based content.
+    // Only "user" messages are sent via sendMessage; other roles are handled by the chat system
+    if (message.role === "user") {
+      await sendMessage({ role: "user", parts: [{ type: "text", text: message.content }] } as any);
+    }
+    // Return null as the current implementation doesn't need to return a value
+    return null;
   }, [sendMessage]);
 
   const handleSubmit = useCallback((e?: React.FormEvent<HTMLFormElement>) => {
     e?.preventDefault();
     if (!input.trim()) return;
-    sendMessage({ role: 'user', content: input });
+    sendMessage({ role: "user", parts: [{ type: "text", text: input }] } as any);
     setInput("");
   }, [input, sendMessage]);
 
@@ -302,6 +336,7 @@ function ProjectContent({ id }: { id: string }) {
   }, [chatData, handleHighlightNodes]);
 
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastTransientSaveErrorRef = useRef<string | null>(null);
   const initialViewportRef = useRef<Viewport | null>(null);
 
   const effectiveMode: Exclude<ModeSetting, "auto"> =
@@ -421,9 +456,15 @@ function ProjectContent({ id }: { id: string }) {
             router.push("/login");
           }, 1500);
         } else {
-          console.error("Failed to save:", result.error, result.debug);
           if (result.error === "Auth service unavailable" || result.error === "Database unavailable") {
+            // Avoid spamming the console for transient backend outages.
+            if (lastTransientSaveErrorRef.current !== result.error) {
+              console.warn("Auto-save paused:", result.error, result.debug);
+              lastTransientSaveErrorRef.current = result.error;
+            }
             setLoadError({ message: result.error, debug: result.debug });
+          } else {
+            console.error("Failed to save:", result.error, result.debug);
           }
           setSaveStatus("idle");
         }
@@ -608,6 +649,107 @@ function ProjectContent({ id }: { id: string }) {
     return { x: 0, y: 0 };
   }, []);
 
+  const openMindsEyeForNode = useCallback(
+    (nodeId: string) => {
+      const node = nodes.find((n) => n.id === nodeId);
+      const imageUrl = (node?.data as any)?.imageUrl as string | undefined;
+      if (!imageUrl || !imageUrl.trim()) return;
+      setMindsEyeSourceNodeId(nodeId);
+      setMindsEyeImageUrl(imageUrl);
+      setMindsEyeOpen(true);
+    },
+    [nodes],
+  );
+
+  const openMindMapForNode = useCallback(
+    (nodeId: string) => {
+      const node = nodes.find((n) => n.id === nodeId);
+      const imageUrl = (node?.data as any)?.imageUrl as string | undefined;
+      if (!imageUrl || !imageUrl.trim()) return;
+      setMindMapSourceNodeId(nodeId);
+      setMindMapImageUrl(imageUrl);
+      setMindMapOpen(true);
+    },
+    [nodes],
+  );
+
+  const applyMindsEyePlan = useCallback(
+    (plan: MindsEyePlan) => {
+      const sourceNode = mindsEyeSourceNodeId
+        ? nodes.find((n) => n.id === mindsEyeSourceNodeId)
+        : null;
+      const anchor = sourceNode ? sourceNode.position : getViewportCenterFlowPosition();
+      const anchorX = anchor.x;
+
+      const now = Date.now();
+      const strategyId = `strategy-${now}`;
+
+      const strategyNode: GrimpoNode = {
+        id: strategyId,
+        type: "strategy",
+        position: { x: anchorX, y: 0 },
+        data: {
+          title: plan.strategy?.title || "Strategy",
+          notes: plan.strategy?.description || "",
+          color: "#ef4444",
+        } as any,
+      };
+
+      const tacticNodes: GrimpoNode[] = (plan.tactics || []).map((t, index) => ({
+        id: `tactical-${now}-${index}`,
+        type: "tactical",
+        position: { x: anchorX + index * 250, y: 300 },
+        data: {
+          title: t.title || `Task ${index + 1}`,
+          notes: `Due in ${t.dueInDays} days`,
+          status: "todo",
+          color: "#22d3ee",
+        } as any,
+      }));
+
+      const newEdges = tacticNodes.map((tNode) => ({
+        id: `edge-${strategyId}-${tNode.id}`,
+        source: strategyId,
+        target: tNode.id,
+        animated: theme === "abyss",
+        style: { stroke: "rgba(239,68,68,0.55)" },
+      }));
+
+      setNodes((nds) => nds.concat([strategyNode, ...tacticNodes]));
+      setEdges((eds) => eds.concat(newEdges as any));
+    },
+    [getViewportCenterFlowPosition, mindsEyeSourceNodeId, nodes, setEdges, setNodes, theme],
+  );
+
+  const applyMindMapGraph = useCallback(
+    (graph: MindMapGraph) => {
+      const sourceNode = mindMapSourceNodeId
+        ? nodes.find((n) => n.id === mindMapSourceNodeId)
+        : null;
+      const anchor = sourceNode ? sourceNode.position : getViewportCenterFlowPosition();
+      const position = { x: anchor.x + 360, y: anchor.y };
+
+      const now = Date.now();
+      const id = `mindmap-${now}`;
+      const title = graph?.root?.title || "Mind Map";
+
+      const data: GrimpoNodeData = {
+        title,
+        notes: graph?.summary || "",
+        color: "#22d3ee",
+        mindmap: {
+          root: graph.root,
+          nodes: graph.nodes,
+          edges: graph.edges,
+          summary: graph.summary,
+        },
+      };
+
+      setNodes((nds) => nds.concat({ id, type: "mindmap", position, data } as any));
+    },
+    [getViewportCenterFlowPosition, mindMapSourceNodeId, nodes, setNodes],
+  );
+
   const onExtractTask = useCallback(
     (text: string, sourceNodeId: string) => {
       const sourceNode = nodes.find((n) => n.id === sourceNodeId);
@@ -668,6 +810,8 @@ function ProjectContent({ id }: { id: string }) {
           onTaskDone: isTrace ? undefined : onTaskDone,
           onBathysphereMode: isTrace ? undefined : handleBathysphereMode,
           onExtractTask: isTrace ? undefined : onExtractTask,
+          onOpenMindsEye: isTrace ? undefined : openMindsEyeForNode,
+          onOpenMindMap: isTrace ? undefined : openMindMapForNode,
           isTrace,
           sonarOpacity: currentOpacity,
           isHighlighted,
@@ -675,7 +819,7 @@ function ProjectContent({ id }: { id: string }) {
         },
       };
     });
-  }, [effectiveMode, nodes, onDeleteNode, onTaskDone, onUpdateNode, viewport.zoom, selectedNodeIds, handleBathysphereMode, onExtractTask, highlightedNodes, theme, sonarOpacity, activeCanvasOpacity]);
+  }, [effectiveMode, nodes, onDeleteNode, onTaskDone, onUpdateNode, viewport.zoom, selectedNodeIds, handleBathysphereMode, onExtractTask, openMindsEyeForNode, openMindMapForNode, highlightedNodes, theme, sonarOpacity, activeCanvasOpacity]);
 
   const viewEdges = useMemo(() => {
     return edges.map((e) => {
@@ -927,6 +1071,26 @@ function ProjectContent({ id }: { id: string }) {
           : "bg-slate-50 text-slate-900"
       }`}
     >
+      <MindsEyeModal
+        open={mindsEyeOpen}
+        imageUrl={mindsEyeImageUrl}
+        onClose={() => {
+          setMindsEyeOpen(false);
+          setMindsEyeImageUrl(null);
+          setMindsEyeSourceNodeId(null);
+        }}
+        onApplyPlan={applyMindsEyePlan}
+      />
+      <MindMapModal
+        open={mindMapOpen}
+        imageUrl={mindMapImageUrl}
+        onClose={() => {
+          setMindMapOpen(false);
+          setMindMapImageUrl(null);
+          setMindMapSourceNodeId(null);
+        }}
+        onApply={applyMindMapGraph}
+      />
       {loadError && (
         <div className="pointer-events-none absolute top-20 left-1/2 z-[120] -translate-x-1/2">
           <div

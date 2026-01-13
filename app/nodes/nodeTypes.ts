@@ -3,6 +3,7 @@ import { GlassNode } from "./GlassNode";
 import { SketchNode } from "./SketchNode";
 import { MediaNode } from "./MediaNode";
 import { LightboxNode } from "./LightboxNode";
+import { MindMapNode } from "./MindMapNode";
 
 export const nodeTypes: NodeTypes = {
   strategy: GlassNode,
@@ -11,6 +12,7 @@ export const nodeTypes: NodeTypes = {
   sketch: SketchNode,
   media: MediaNode,
   lightbox: LightboxNode,
+  mindmap: MindMapNode,
 };
 
 

@@ -1,8 +1,15 @@
 import type { Edge, Node } from "reactflow";
 
-export type NodeKind = "strategy" | "tactical" | "resource" | "sketch" | "media" | "lightbox";
+export type NodeKind = "strategy" | "tactical" | "resource" | "sketch" | "media" | "lightbox" | "mindmap";
 export type ModeSetting = "auto" | "strategy" | "tactical";
 export type TacticalStatus = "todo" | "done";
+
+export type MindMapData = {
+  root: { title: string };
+  nodes: Array<{ id: string; title: string }>;
+  edges: Array<{ fromId: string; toId: string; label?: string }>;
+  summary?: string;
+};
 
 export type GrimpoNodeData = {
   title: string;
@@ -14,6 +21,8 @@ export type GrimpoNodeData = {
   imageUrl?: string;
   imageOpacity?: number;
   isLightbox?: boolean;
+  // Mind map only:
+  mindmap?: MindMapData;
   // Tactical only:
   status?: TacticalStatus;
   // Visual customization:
