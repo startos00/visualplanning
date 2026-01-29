@@ -24,6 +24,13 @@ type AgentChatProps = {
   theme?: "abyss" | "surface";
 };
 
+const PROVIDER_LABELS: Record<Provider, string> = {
+  openai: "OpenAI",
+  google: "Gemini",
+  anthropic: "Claude",
+  openrouter: "OpenRouter",
+};
+
 export function AgentChat({ chat, agent, onAgentChange, theme = "abyss" }: AgentChatProps) {
   const { messages, input, setInput, handleSubmit, append, isLoading } = chat;
   const [isOpen, setIsOpen] = useState(false);
@@ -88,21 +95,28 @@ export function AgentChat({ chat, agent, onAgentChange, theme = "abyss" }: Agent
 
   const handleSavePreferences = async (provider: Provider, model: string) => {
     const agentType = agent === "dumbo" ? "dumbo" : agent === "dumby" ? "dumby" : "dumbo";
-    const response = await fetch("/api/user/preferences", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ agentType, provider, model }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || "Failed to save preferences");
-    }
-    setCurrentProvider(provider);
-    setCurrentModel(model);
-    // Show warning if API key is missing (but preference was saved)
-    if (data.warning) {
-      setError(data.warning);
-      setTimeout(() => setError(null), 5000); // Clear warning after 5 seconds
+    try {
+      const response = await fetch("/api/user/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentType, provider, model }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        // Extract specific error message from response
+        const errorMessage = data.error || `Failed to save preferences (${response.status})`;
+        throw new Error(errorMessage);
+      }
+      setCurrentProvider(provider);
+      setCurrentModel(model);
+      // Show warning if API key is missing (but preference was saved)
+      if (data.warning) {
+        setError(data.warning);
+        setTimeout(() => setError(null), 5000); // Clear warning after 5 seconds
+      }
+    } catch (err: any) {
+      // Re-throw with better error message
+      throw new Error(err.message || "Failed to save preferences. Please check your connection.");
     }
   };
 
@@ -170,21 +184,22 @@ export function AgentChat({ chat, agent, onAgentChange, theme = "abyss" }: Agent
             </span>
             <span className={`text-sm font-semibold capitalize ${isSurface ? 'text-slate-900' : 'text-white'}`}>{agent}</span>
             {(agent === "dumbo" || agent === "dumby") && (
-              <span className={`text-[10px] mt-0.5 ${isSurface ? 'text-slate-400' : 'text-white/50'}`}>
-                {currentProvider === "openai" ? "OpenAI" : currentProvider === "google" ? "Gemini" : "Claude"} • {currentModel.replace(/-/g, " ")}
-              </span>
+              <AiProviderSelector
+                agentType={agent as AgentType}
+                currentProvider={currentProvider}
+                currentModel={currentModel}
+                onSave={handleSavePreferences}
+                trigger={
+                  <button className={`text-[10px] mt-0.5 flex items-center gap-1 hover:text-white transition-colors ${isSurface ? 'text-slate-400' : 'text-white/50'}`}>
+                    {PROVIDER_LABELS[currentProvider]} • {currentModel.replace(/-/g, " ")}
+                    <ChevronDown className="h-2 w-2" />
+                  </button>
+                }
+              />
             )}
           </div>
         </div>
         <div className={`flex items-center gap-1 ${isSurface ? 'text-slate-400' : 'text-white'}`}>
-          {(agent === "dumbo" || agent === "dumby") && (
-            <AiProviderSelector
-              agentType={agent as AgentType}
-              currentProvider={currentProvider}
-              currentModel={currentModel}
-              onSave={handleSavePreferences}
-            />
-          )}
           <button onClick={() => setIsMinimized(!isMinimized)} className="rounded-full p-1.5 hover:bg-black/5">
             {isMinimized ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>

@@ -186,7 +186,7 @@ CREATE TABLE IF NOT EXISTS user_ai_preferences (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   agent_type TEXT NOT NULL CHECK (agent_type IN ('dumbo', 'dumby')),
-  provider TEXT NOT NULL CHECK (provider IN ('openai', 'google', 'anthropic')),
+  provider TEXT NOT NULL CHECK (provider IN ('openai', 'google', 'anthropic', 'openrouter')),
   model TEXT NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -194,4 +194,40 @@ CREATE TABLE IF NOT EXISTS user_ai_preferences (
 );
 
 CREATE INDEX IF NOT EXISTS idx_user_ai_preferences_user_id ON user_ai_preferences(user_id);
+
+-- Ideas / Thought Pool table
+-- Quick capture area for dumping ideas before converting to tactical nodes
+CREATE TABLE IF NOT EXISTS ideas (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  image_url TEXT,
+  priority INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'processed', 'archived')),
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ideas_user_id ON ideas(user_id);
+CREATE INDEX IF NOT EXISTS idx_ideas_project_id ON ideas(project_id);
+CREATE INDEX IF NOT EXISTS idx_ideas_status ON ideas(status);
+
+-- Grimpy Workshop Sessions table
+-- Stores interview context and generated plans from Grimpy workshops
+CREATE TABLE IF NOT EXISTS workshop_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+  idea_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+  timeline_type TEXT NOT NULL CHECK (timeline_type IN ('daily', 'weekly', 'monthly', 'quarterly', 'phases')),
+  interview_context JSONB,
+  generated_plan JSONB,
+  status TEXT NOT NULL DEFAULT 'in_progress' CHECK (status IN ('in_progress', 'completed', 'cancelled')),
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_workshop_sessions_user_id ON workshop_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_workshop_sessions_project_id ON workshop_sessions(project_id);
 

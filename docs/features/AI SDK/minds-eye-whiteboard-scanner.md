@@ -28,8 +28,23 @@ As a user, I want to select a photo/lightbox image of a sketch and have Grimpy c
 - The backend must:
   - require authentication
   - validate input
-  - call `generateObject({ model: openai('gpt-4o'), schema, messages })`
+  - call `generateObject({ model: <selected-model>, schema, messages })` with the user-selected model
   - return the validated JSON object
+
+#### Supported Providers & Models
+The model selection must include these models:
+
+##### Google (Gemini)
+- `gemini-2.5`
+- `gemini-3.0-flash`
+
+##### OpenAI
+- `gpt-4o`
+- `gpt-4o-mini`
+
+##### OpenRouter (or equivalent aggregator)
+- `xiaomi/mimo-v2-flash`
+- `allenai/molmo-2-8b:free`
 
 ### 3) Output Schema (Blueprint)
 The backend output must match:
@@ -53,7 +68,8 @@ When the frontend receives the JSON, it must map to React Flow:
 ### 5) UX & Error Handling
 - Show a modal with:
   - image preview
-  - “Analyze” action
+  - provider/model selection dropdown
+  - "Analyze" action
   - loading state while the model runs
   - error message on failure (auth missing, invalid image, provider error)
 - The board must not be mutated on failure.
@@ -79,7 +95,7 @@ When the frontend receives the JSON, it must map to React Flow:
 - ✅ Mind’s Eye can be triggered from `media`/`lightbox` nodes that have `imageUrl`.
 - ✅ Backend route requires auth and returns `401` when not signed in.
 - ✅ Backend validates request body and returns `400` for missing/invalid `base64Image`.
-- ✅ Backend uses `openai('gpt-4o')` and `generateObject` with the defined Zod schema.
+- ✅ Backend uses the selected model and `generateObject` with the defined Zod schema.
 - ✅ Frontend correctly maps the returned plan into nodes/edges with required positions/colors.
 - ✅ `dueInDays` is stored in tactic node `notes` (and not in `deadline`).
 - ✅ Failures show clear errors and do not corrupt canvas state.

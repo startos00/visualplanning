@@ -5,7 +5,7 @@ import { userAiPreferences } from "@/app/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { safeGetSession } from "@/app/lib/safeSession";
 import type { AgentType, Provider } from "@/app/lib/ai/aiConstants";
-import { isValidModel } from "@/app/lib/ai/aiConstants";
+import { isValidModel, VALID_MODELS } from "@/app/lib/ai/aiConstants";
 
 /**
  * Get user's AI preferences for both agents
@@ -78,7 +78,8 @@ export async function updateUserAiPreference(
 
     // Validate provider/model combination
     if (!isValidModel(provider, model)) {
-      return { error: `Invalid model "${model}" for provider "${provider}"` };
+      console.error(`Invalid model "${model}" for provider "${provider}". Valid models:`, VALID_MODELS[provider]);
+      return { error: `Invalid model "${model}" for provider "${provider}". Please select a valid model from the dropdown.` };
     }
 
     // Check if preference exists
@@ -121,7 +122,20 @@ export async function updateUserAiPreference(
     return { success: true };
   } catch (error) {
     console.error("Error updating user AI preference:", error);
-    return { error: "Failed to update preference" };
+    const err = error as any;
+    // Provide more specific error messages
+    if (err?.code === "42P01") {
+      return { error: "Database table not found. Please run migrations." };
+    }
+    if (err?.message?.includes("violates unique constraint")) {
+      return { error: "Preference already exists. Please try again." };
+    }
+    if (err?.message?.includes("violates foreign key constraint")) {
+      return { error: "Invalid user or agent type." };
+    }
+    // Return sanitized error message for user-facing errors
+    const errorMessage = err?.message || "Failed to update preference";
+    return { error: errorMessage };
   }
 }
 

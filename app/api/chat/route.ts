@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/app/lib/auth";
 import { streamText, createUIMessageStream, createUIMessageStreamResponse } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { openai, createOpenAI } from "@ai-sdk/openai";
 import { google } from "@ai-sdk/google";
 import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
@@ -144,12 +144,26 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+    const openrouterKey = process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_KEY;
+    if (provider === "openrouter" && !openrouterKey) {
+      return NextResponse.json(
+        { error: "Missing OpenRouter API key. Please configure OPENROUTER_API_KEY in your environment or contact support." },
+        { status: 500 }
+      );
+    }
 
     let model;
     if (provider === "anthropic") {
       model = anthropic(modelId);
     } else if (provider === "google") {
       model = google(modelId);
+    } else if (provider === "openrouter") {
+      // OpenRouter uses OpenAI-compatible API
+      const openrouter = createOpenAI({
+        baseURL: "https://openrouter.ai/api/v1",
+        apiKey: openrouterKey,
+      });
+      model = openrouter(modelId);
     } else {
       model = openai(modelId);
     }
@@ -220,19 +234,29 @@ export async function POST(request: Request) {
           break;
       }
 
-      // Add the tool result as context for the AI
-      const messagesWithContext = [
-        ...normalizedMessages,
-        {
+      // Add the tool result as context for the AI by merging it into the last user message
+      // to maintain alternating user/assistant roles (required by some providers like OpenRouter/Molmo)
+      const messagesWithContext = [...normalizedMessages];
+      const lastMessage = messagesWithContext[messagesWithContext.length - 1];
+      const contextContent = `I just scanned the canvas for deadlines. Here's what I found:\n\n${JSON.stringify(deadlineResults, null, 2)}\n\nPlease summarize this in a friendly, encouraging way for the user! Mention the specific tasks and their deadlines.`;
+
+      if (lastMessage && lastMessage.role === "user") {
+        messagesWithContext[messagesWithContext.length - 1] = {
+          ...lastMessage,
+          content: `${lastMessage.content}\n\n[System Context: ${contextContent}]`,
+        };
+      } else {
+        messagesWithContext.push({
           role: "user" as const,
-          content: `I just scanned the canvas for deadlines. Here's what I found:\n\n${JSON.stringify(deadlineResults, null, 2)}\n\nPlease summarize this in a friendly, encouraging way for the user! Mention the specific tasks and their deadlines.`,
-        },
-      ];
+          content: contextContent,
+        });
+      }
 
       const result = streamText({
         model,
         system: systemPrompt,
-        messages: messagesWithContext,
+        messages: messagesWithContext as any,
+        maxOutputTokens: 1000,
       });
 
       return createUIMessageStreamResponse({

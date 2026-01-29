@@ -90,7 +90,7 @@ export async function getProviderAndModel(
  */
 function normalizeProvider(provider: string): Provider | null {
   const normalized = provider.trim().toLowerCase();
-  if (normalized === "openai" || normalized === "google" || normalized === "anthropic") {
+  if (normalized === "openai" || normalized === "google" || normalized === "anthropic" || normalized === "openrouter") {
     return normalized as Provider;
   }
   return null;

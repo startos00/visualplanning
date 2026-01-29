@@ -2,23 +2,29 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/app/lib/auth";
 import { generateObject } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { openai, createOpenAI } from "@ai-sdk/openai";
 import { google } from "@ai-sdk/google";
 import { z } from "zod";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+const edgeSchema = z.object({
+  fromId: z.string(),
+  toId: z.string(),
+  label: z.string().nullish(),
+});
+
 const schema = z.object({
   root: z.object({ title: z.string() }),
   nodes: z.array(z.object({ id: z.string(), title: z.string() })),
-  edges: z.array(z.object({ fromId: z.string(), toId: z.string(), label: z.string().optional() })),
+  edges: z.array(edgeSchema),
   summary: z.string(),
 });
 
 type AnalyzeMindMapBody = {
   base64Image: string;
-  provider?: "openai" | "google";
+  provider?: "openai" | "google" | "openrouter";
   model?: string;
 };
 
@@ -45,14 +51,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing or invalid base64Image" }, { status: 400 });
     }
 
-    const provider: "openai" | "google" = body?.provider === "google" ? "google" : "openai";
+    const provider: "openai" | "google" | "openrouter" = body?.provider === "google" ? "google" : body?.provider === "openrouter" ? "openrouter" : "openai";
     const requestedModel = typeof body?.model === "string" ? body.model.trim() : "";
-    const modelId =
-      provider === "google"
-        ? (requestedModel === "gemini-2.5-flash" || requestedModel === "gemini-3-flash-preview"
-            ? requestedModel
-            : "gemini-2.5-flash")
-        : "gpt-4o";
+    
+    // Supported models per provider (per FRED requirements)
+    const validModels = {
+      google: ["gemini-2.5", "gemini-3.0-flash", "gemini-2.5-flash", "gemini-3-flash-preview"],
+      openai: ["gpt-4o", "gpt-4o-mini"],
+      openrouter: ["xiaomi/mimo-v2-flash", "allenai/molmo-2-8b:free", "xiaomi/mimo-v2-flash:free"],
+    };
+    
+    const defaultModels = {
+      google: "gemini-2.5-flash",
+      openai: "gpt-4o",
+      openrouter: "xiaomi/mimo-v2-flash",
+    };
+    
+    const modelId = requestedModel && validModels[provider].includes(requestedModel)
+      ? requestedModel
+      : defaultModels[provider];
 
     if (provider === "openai" && !process.env.OPENAI_API_KEY) {
       return NextResponse.json({ error: "Missing OPENAI_API_KEY in .env.local" }, { status: 500 });
@@ -63,9 +80,30 @@ export async function POST(request: Request) {
         { status: 500 },
       );
     }
+    const openrouterKey = process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_KEY;
+    if (provider === "openrouter" && !openrouterKey) {
+      return NextResponse.json(
+        { error: "Missing OpenRouter API key in .env.local" },
+        { status: 500 },
+      );
+    }
+
+    let model;
+    if (provider === "google") {
+      model = google(modelId);
+    } else if (provider === "openrouter") {
+      // OpenRouter uses OpenAI-compatible API
+      const openrouter = createOpenAI({
+        baseURL: "https://openrouter.ai/api/v1",
+        apiKey: openrouterKey,
+      });
+      model = openrouter(modelId);
+    } else {
+      model = openai(modelId);
+    }
 
     const { object } = await generateObject({
-      model: provider === "google" ? google(modelId) : openai(modelId),
+      model,
       schema,
       messages: [
         {
@@ -74,12 +112,26 @@ export async function POST(request: Request) {
             {
               type: "text",
               text: [
-                "Convert this sketch into a mind map.",
-                "Return a concise root, nodes, and edges.",
+                "Convert this sketch into a mind map. You MUST return a structured JSON object matching this exact schema:",
+                "",
+                "{",
+                '  "root": { "title": "central topic name" },',
+                '  "nodes": [',
+                '    { "id": "n1", "title": "node 1 title" },',
+                '    { "id": "n2", "title": "node 2 title" }',
+                "  ],",
+                '  "edges": [',
+                '    { "fromId": "n1", "toId": "n2", "label": "optional label" }',
+                "  ],",
+                '  "summary": "brief description"',
+                "}",
+                "",
                 "Rules:",
-                "- ids must be short stable strings (e.g. n1, n2, ...).",
-                "- Keep nodes <= 18.",
-                "- Prefer a tree-like structure (few cross-links).",
+                "- Use short stable IDs like 'n1', 'n2', 'n3' for nodes",
+                "- Keep total nodes <= 18",
+                "- Prefer a tree-like structure (few cross-links)",
+                "- All fromId and toId values must exist in the nodes array",
+                "- Return ONLY the JSON object, no additional text, explanations, or markdown formatting",
               ].join("\n"),
             },
             { type: "image", image: base64Image },
@@ -94,16 +146,26 @@ export async function POST(request: Request) {
 
     const err = error as any;
     const nested = err?.lastError ?? err?.cause ?? err;
+    
+    // Check for JSON parsing errors specifically
+    const errorMessage = typeof nested?.message === "string" ? nested.message : String(err?.message || error);
+    const isJsonError = errorMessage.includes("JSON") || errorMessage.includes("parsing") || errorMessage.includes("Unexpected token");
+    
     const statusCode: number | undefined =
       typeof nested?.statusCode === "number"
         ? nested.statusCode
         : typeof err?.statusCode === "number"
           ? err.statusCode
           : undefined;
-    const message: string =
-      typeof nested?.message === "string" && nested.message.trim().length > 0
+    
+    let message: string;
+    if (isJsonError) {
+      message = `Model returned invalid format. Please try a different model (GPT-4o or Gemini 2.5 recommended). Error: ${errorMessage.slice(0, 200)}`;
+    } else {
+      message = typeof nested?.message === "string" && nested.message.trim().length > 0
         ? nested.message
         : "Failed to analyze mind map";
+    }
 
     return NextResponse.json({ error: message }, { status: statusCode ?? 500 });
   }

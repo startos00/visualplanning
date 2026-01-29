@@ -1,14 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
+import { AbyssalDropdown } from "./ui/AbyssalDropdown";
 
 export type MindsEyePlan = {
   strategy: { title: string; description: string };
   tactics: Array<{ title: string; dueInDays: number }>;
   summary: string;
-  provider?: "openai" | "google";
+  provider?: "openai" | "google" | "openrouter";
   model?: string;
 };
 
@@ -40,7 +41,36 @@ export function MindsEyeModal(props: {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
   const [plan, setPlan] = useState<MindsEyePlan | null>(null);
-  const [engine, setEngine] = useState<"openai" | "google">("openai");
+  const [provider, setProvider] = useState<"openai" | "google" | "openrouter">("openai");
+  const [model, setModel] = useState<string>("gpt-4o");
+
+  // Model options per provider (per FRED requirements)
+  const modelOptions = {
+    google: [
+      { label: "Gemini 2.5", value: "gemini-2.5" },
+      { label: "Gemini 3.0 Flash", value: "gemini-3.0-flash" },
+    ],
+    openai: [
+      { label: "GPT-4o", value: "gpt-4o" },
+      { label: "GPT-4o Mini", value: "gpt-4o-mini" },
+    ],
+    openrouter: [
+      { label: "Xiaomi Mimo V2 Flash", value: "xiaomi/mimo-v2-flash" },
+      { label: "AllenAI Molmo 2 8B (Free)", value: "allenai/molmo-2-8b:free" },
+    ],
+  };
+
+  const defaultModels = {
+    google: "gemini-2.5-flash",
+    openai: "gpt-4o",
+    openrouter: "xiaomi/mimo-v2-flash",
+  };
+
+  // Reset model when provider changes
+  useEffect(() => {
+    setModel(defaultModels[provider]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provider]);
 
   const canAnalyze = useMemo(() => !!imageUrl && !loading, [imageUrl, loading]);
 
@@ -56,8 +86,8 @@ export function MindsEyeModal(props: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           base64Image,
-          provider: engine,
-          model: engine === "google" ? "gemini-2.5-flash" : "gpt-4o",
+          provider,
+          model,
         }),
       });
 
@@ -92,12 +122,12 @@ export function MindsEyeModal(props: {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
             transition={{ duration: 0.18 }}
-            className="w-full max-w-[680px] overflow-hidden rounded-3xl border border-cyan-300/20 bg-slate-950/80 text-cyan-50 shadow-[0_0_30px_rgba(34,211,238,0.12)]"
+            className="w-full max-w-[680px] rounded-3xl border border-cyan-300/20 bg-slate-950/80 text-cyan-50 shadow-[0_0_30px_rgba(34,211,238,0.12)] overflow-visible"
           >
             <div className="flex items-center justify-between gap-3 border-b border-cyan-300/10 px-5 py-4">
               <div className="min-w-0">
                 <div className="text-xs tracking-widest text-cyan-200/70">GRIMPY</div>
-                <div className="truncate text-lg font-semibold">Mind’s Eye</div>
+                <div className="truncate text-lg font-semibold">Mind's Eye</div>
               </div>
               <button
                 className="rounded-full border border-cyan-300/20 bg-white/5 p-2 text-cyan-100 hover:bg-white/10"
@@ -126,35 +156,29 @@ export function MindsEyeModal(props: {
                   )}
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={loading}
-                    onClick={() => setEngine("openai")}
-                    className={[
-                      "rounded-full border px-3 py-1.5 text-[11px] font-semibold tracking-wide transition-all",
-                      engine === "openai"
-                        ? "border-cyan-300/30 bg-cyan-400/15 text-cyan-50"
-                        : "border-cyan-300/10 bg-white/5 text-cyan-100/50 hover:bg-white/10",
-                    ].join(" ")}
-                    title="Use OpenAI GPT-4o (vision)"
-                  >
-                    GPT-4o
-                  </button>
-                  <button
-                    type="button"
-                    disabled={loading}
-                    onClick={() => setEngine("google")}
-                    className={[
-                      "rounded-full border px-3 py-1.5 text-[11px] font-semibold tracking-wide transition-all",
-                      engine === "google"
-                        ? "border-cyan-300/30 bg-cyan-400/15 text-cyan-50"
-                        : "border-cyan-300/10 bg-white/5 text-cyan-100/50 hover:bg-white/10",
-                    ].join(" ")}
-                    title="Use Google Gemini Flash"
-                  >
-                    Gemini Flash
-                  </button>
+                <div className="space-y-2 overflow-visible">
+                  <div className="flex items-center gap-2 overflow-visible">
+                    <span className="text-[11px] tracking-widest text-cyan-200/70 whitespace-nowrap">PROVIDER</span>
+                    <AbyssalDropdown
+                      options={[
+                        { label: "OpenAI", value: "openai" },
+                        { label: "Google", value: "google" },
+                        { label: "OpenRouter", value: "openrouter" },
+                      ]}
+                      value={provider}
+                      onChange={(value) => setProvider(value as "openai" | "google" | "openrouter")}
+                      className="flex-1 relative z-10"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 overflow-visible">
+                    <span className="text-[11px] tracking-widest text-cyan-200/70 whitespace-nowrap">MODEL</span>
+                    <AbyssalDropdown
+                      options={modelOptions[provider]}
+                      value={model}
+                      onChange={(value) => setModel(value)}
+                      className="flex-1 relative z-10"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -184,7 +208,7 @@ export function MindsEyeModal(props: {
                     <div className="space-y-3">
                       {(plan.provider || plan.model) && (
                         <div className="text-[11px] text-cyan-100/60">
-                          {plan.provider === "google" ? "Gemini" : plan.provider === "openai" ? "OpenAI" : plan.provider}{" "}
+                          {plan.provider === "google" ? "Gemini" : plan.provider === "openai" ? "OpenAI" : plan.provider === "openrouter" ? "OpenRouter" : plan.provider}{" "}
                           {plan.model ? `• ${plan.model}` : ""}
                         </div>
                       )}

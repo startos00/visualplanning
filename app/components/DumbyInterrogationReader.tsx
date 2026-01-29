@@ -13,6 +13,13 @@ import { AiProviderSelector } from "./ui/AiProviderSelector";
 import type { Provider } from "@/app/lib/ai/aiConstants";
 import { DEFAULT_MODELS } from "@/app/lib/ai/aiConstants";
 
+const PROVIDER_LABELS: Record<Provider, string> = {
+  openai: "OpenAI",
+  google: "Gemini",
+  anthropic: "Claude",
+  openrouter: "OpenRouter",
+};
+
 // Import from react-pdf-highlighter
 // Note: User needs to run `npm install react-pdf-highlighter`
 import {
@@ -172,21 +179,28 @@ export function DumbyInterrogationReader({
   }, []);
 
   const handleSavePreferences = async (provider: Provider, model: string) => {
-    const response = await fetch("/api/user/preferences", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ agentType: "dumby", provider, model }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || "Failed to save preferences");
-    }
-    setCurrentProvider(provider);
-    setCurrentModel(model);
-    // Show warning if API key is missing (but preference was saved)
-    if (data.warning) {
-      setChatError(data.warning);
-      setTimeout(() => setChatError(""), 5000); // Clear warning after 5 seconds
+    try {
+      const response = await fetch("/api/user/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentType: "dumby", provider, model }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        // Extract specific error message from response
+        const errorMessage = data.error || `Failed to save preferences (${response.status})`;
+        throw new Error(errorMessage);
+      }
+      setCurrentProvider(provider);
+      setCurrentModel(model);
+      // Show warning if API key is missing (but preference was saved)
+      if (data.warning) {
+        setChatError(data.warning);
+        setTimeout(() => setChatError(""), 5000); // Clear warning after 5 seconds
+      }
+    } catch (err: any) {
+      // Re-throw with better error message
+      throw new Error(err.message || "Failed to save preferences. Please check your connection.");
     }
   };
 
@@ -409,17 +423,22 @@ export function DumbyInterrogationReader({
           <div>
             <div className="text-xs tracking-widest text-orange-400/80">DUMBY_ANALYSIS_PROTOCOL</div>
             <div className="mt-1 text-lg font-semibold text-orange-50">{nodeTitle || "PDF Document"}</div>
-            <div className="mt-1 text-[10px] text-orange-400/50">
-              {currentProvider === "openai" ? "OpenAI" : currentProvider === "google" ? "Gemini" : "Claude"} • {currentModel.replace(/-/g, " ")}
+            <div className="mt-1">
+              <AiProviderSelector
+                agentType="dumby"
+                currentProvider={currentProvider}
+                currentModel={currentModel}
+                onSave={handleSavePreferences}
+                trigger={
+                  <button className="flex items-center gap-1 text-[10px] text-orange-400/50 hover:text-orange-300 transition-colors">
+                    {PROVIDER_LABELS[currentProvider]} • {currentModel.replace(/-/g, " ")}
+                    <ChevronDown className="h-2 w-2" />
+                  </button>
+                }
+              />
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <AiProviderSelector
-              agentType="dumby"
-              currentProvider={currentProvider}
-              currentModel={currentModel}
-              onSave={handleSavePreferences}
-            />
             <button
               onClick={onClose}
               className="rounded-full border border-orange-500/20 bg-slate-950/40 p-2 text-orange-200 hover:bg-slate-950/60"

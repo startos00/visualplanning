@@ -70,6 +70,8 @@ export async function POST(request: Request) {
       apiKeyWarning = "Missing API key for Anthropic. Please configure ANTHROPIC_API_KEY in your environment.";
     } else if (provider === "google" && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
       apiKeyWarning = "Missing API key for Google. Please configure GOOGLE_GENERATIVE_AI_API_KEY in your environment.";
+    } else if (provider === "openrouter" && !process.env.OPENROUTER_API_KEY && !process.env.OPENROUTER_KEY) {
+      apiKeyWarning = "Missing API key for OpenRouter. Please configure OPENROUTER_API_KEY or OPENROUTER_KEY in your environment.";
     }
 
     const result = await updateUserAiPreference(
@@ -79,6 +81,7 @@ export async function POST(request: Request) {
     );
 
     if ("error" in result) {
+      // Return the specific error from the server action
       return NextResponse.json({ error: result.error }, { status: 400 });
     }
 
@@ -88,8 +91,11 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Error in POST /api/user/preferences:", error);
+    const err = error as any;
+    // Provide more context in error response
+    const errorMessage = err?.message || "Failed to update preference. Please check your connection and try again.";
     return NextResponse.json(
-      { error: "Failed to update preference" },
+      { error: errorMessage },
       { status: 500 }
     );
   }

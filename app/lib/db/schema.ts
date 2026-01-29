@@ -250,3 +250,70 @@ export type NewBookshelf = typeof bookshelves.$inferInsert;
 export type UserAiPreference = typeof userAiPreferences.$inferSelect;
 export type NewUserAiPreference = typeof userAiPreferences.$inferInsert;
 
+// Ideas / Thought Pool table
+// Quick capture area for dumping ideas before converting to tactical nodes
+export const ideas = pgTable(
+  "ideas",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id").references(() => projects.id, { onDelete: "cascade" }),
+    content: text("content").notNull(),
+    imageUrl: text("image_url"),
+    priority: integer("priority").notNull().default(0),
+    status: text("status").notNull().default("active"), // 'active' | 'processed' | 'archived'
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("idx_ideas_user_id").on(table.userId),
+    projectIdIdx: index("idx_ideas_project_id").on(table.projectId),
+    statusIdx: index("idx_ideas_status").on(table.status),
+  }),
+);
+
+// Workshop Plan type for generated plans
+export type WorkshopPlan = {
+  strategy: { title: string; description: string };
+  milestones?: Array<{ title: string; targetDate?: string; description?: string }>;
+  tactics: Array<{
+    title: string;
+    description?: string;
+    deadline?: string;
+    sourceIdeaId?: string;
+  }>;
+  timeline: {
+    type: "daily" | "weekly" | "monthly" | "quarterly" | "phases";
+    startDate?: string;
+    phases?: Array<{ name: string; duration: string }>;
+  };
+  summary: string;
+};
+
+// Grimpy Workshop Sessions table
+// Stores interview context and generated plans from Grimpy workshops
+export const workshopSessions = pgTable(
+  "workshop_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id").references(() => projects.id, { onDelete: "cascade" }),
+    ideaIds: jsonb("idea_ids").$type<string[]>().notNull().default([]),
+    timelineType: text("timeline_type").notNull(), // 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'phases'
+    interviewContext: jsonb("interview_context").$type<Record<string, unknown>>(),
+    generatedPlan: jsonb("generated_plan").$type<WorkshopPlan | null>(),
+    status: text("status").notNull().default("in_progress"), // 'in_progress' | 'completed' | 'cancelled'
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("idx_workshop_sessions_user_id").on(table.userId),
+    projectIdIdx: index("idx_workshop_sessions_project_id").on(table.projectId),
+  }),
+);
+
+export type Idea = typeof ideas.$inferSelect;
+export type NewIdea = typeof ideas.$inferInsert;
+export type WorkshopSession = typeof workshopSessions.$inferSelect;
+export type NewWorkshopSession = typeof workshopSessions.$inferInsert;
+

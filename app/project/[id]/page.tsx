@@ -40,6 +40,10 @@ import { DumbyReader } from "@/app/components/DumbyReader";
 import { MindsEyeModal, type MindsEyePlan } from "@/app/components/MindsEyeModal";
 import { MindMapModal, type MindMapGraph } from "@/app/components/MindMapModal";
 import { AgentChat } from "@/app/components/AgentChat";
+import { ThoughtPoolPanel } from "@/app/components/ThoughtPool/ThoughtPoolPanel";
+import { GrimpyWorkshopChat } from "@/app/components/ThoughtPool/GrimpyWorkshopChat";
+import type { Idea, WorkshopPlan } from "@/app/lib/db/schema";
+import { markIdeaProcessed } from "@/app/actions/ideas";
 import { MascotAgentPanel } from "@/app/components/MascotAgentPanel";
 import { CreationDock } from "@/app/components/CreationDock";
 import type { GrimpoNode } from "@/app/lib/graph";
@@ -232,6 +236,9 @@ function ProjectContent({ id }: { id: string }) {
   const [mindMapOpen, setMindMapOpen] = useState(false);
   const [mindMapSourceNodeId, setMindMapSourceNodeId] = useState<string | null>(null);
   const [mindMapImageUrl, setMindMapImageUrl] = useState<string | null>(null);
+  const [thoughtPoolOpen, setThoughtPoolOpen] = useState(false);
+  const [grimpyWorkshopOpen, setGrimpyWorkshopOpen] = useState(false);
+  const [workshopIdeas, setWorkshopIdeas] = useState<Idea[]>([]);
 
   useEffect(() => {
     // #region agent log
@@ -364,11 +371,16 @@ function ProjectContent({ id }: { id: string }) {
 
       if (result.error) {
         const transient = result.error === "Database unavailable" || result.error === "Auth service unavailable";
-        (transient ? console.warn : console.error)(
-          "Failed to load project:",
-          result.error,
-          (result as any)?.debug ?? null
-        );
+        const expected = result.error === "Unauthorized" || result.error === "Project not found";
+        
+        if (!expected) {
+          (transient ? console.warn : console.error)(
+            "Failed to load project:",
+            result.error,
+            (result as any)?.debug ?? null
+          );
+        }
+
         if (result.error === "Unauthorized") {
           router.push("/login");
         } else if (result.error === "Project not found") {
@@ -750,6 +762,86 @@ function ProjectContent({ id }: { id: string }) {
     [getViewportCenterFlowPosition, mindMapSourceNodeId, nodes, setNodes],
   );
 
+  const applyWorkshopPlan = useCallback(
+    async (plan: WorkshopPlan) => {
+      const anchor = getViewportCenterFlowPosition();
+      const now = Date.now();
+      const strategyId = `strategy-${now}`;
+
+      // Create strategy node
+      const strategyNode: GrimpoNode = {
+        id: strategyId,
+        type: "strategy",
+        position: { x: anchor.x, y: anchor.y },
+        data: {
+          title: plan.strategy.title,
+          notes: plan.strategy.description,
+          color: "#ef4444",
+        } as any,
+      };
+
+      // Create milestone nodes (if any)
+      const milestoneNodes: GrimpoNode[] = (plan.milestones || []).map((m, index) => ({
+        id: `milestone-${now}-${index}`,
+        type: "strategy",
+        position: { x: anchor.x + (index + 1) * 300, y: anchor.y - 150 },
+        data: {
+          title: m.title,
+          notes: m.description || m.targetDate ? `Target: ${m.targetDate}` : "",
+          color: "#f59e0b",
+        } as any,
+      }));
+
+      // Create tactical nodes with deadlines
+      const tacticNodes: GrimpoNode[] = plan.tactics.map((t, index) => ({
+        id: `tactical-${now}-${index}`,
+        type: "tactical",
+        position: { x: anchor.x + (index % 4) * 280, y: anchor.y + 200 + Math.floor(index / 4) * 200 },
+        data: {
+          title: t.title,
+          notes: t.description || "",
+          status: "todo",
+          deadline: t.deadline,
+          color: "#22d3ee",
+        } as any,
+      }));
+
+      // Create edges from strategy to milestones and tactics
+      const milestoneEdges = milestoneNodes.map((mNode) => ({
+        id: `edge-${strategyId}-${mNode.id}`,
+        source: strategyId,
+        target: mNode.id,
+        animated: theme === "abyss",
+        style: { stroke: "rgba(239,68,68,0.55)" },
+      }));
+
+      const tacticEdges = tacticNodes.map((tNode) => ({
+        id: `edge-${strategyId}-${tNode.id}`,
+        source: strategyId,
+        target: tNode.id,
+        animated: theme === "abyss",
+        style: { stroke: "rgba(239,68,68,0.55)" },
+      }));
+
+      setNodes((nds) => nds.concat([strategyNode, ...milestoneNodes, ...tacticNodes]));
+      setEdges((eds) => eds.concat([...milestoneEdges, ...tacticEdges] as any));
+
+      // Mark ideas as processed
+      for (const idea of workshopIdeas) {
+        await markIdeaProcessed(idea.id);
+      }
+
+      setGrimpyWorkshopOpen(false);
+      setWorkshopIdeas([]);
+    },
+    [getViewportCenterFlowPosition, setNodes, setEdges, theme, workshopIdeas],
+  );
+
+  const handleOpenWorkshop = useCallback((selectedIdeas: Idea[]) => {
+    setWorkshopIdeas(selectedIdeas);
+    setGrimpyWorkshopOpen(true);
+  }, []);
+
   const onExtractTask = useCallback(
     (text: string, sourceNodeId: string) => {
       const sourceNode = nodes.find((n) => n.id === sourceNodeId);
@@ -1091,6 +1183,31 @@ function ProjectContent({ id }: { id: string }) {
         }}
         onApply={applyMindMapGraph}
       />
+      <ThoughtPoolPanel
+        isOpen={thoughtPoolOpen}
+        onClose={() => setThoughtPoolOpen(false)}
+        projectId={id}
+        theme={theme}
+        onOpenWorkshop={handleOpenWorkshop}
+        onSendToGrimpy={(idea) => {
+          setWorkshopIdeas([idea]);
+          setGrimpyWorkshopOpen(true);
+        }}
+      />
+      <AnimatePresence>
+        {grimpyWorkshopOpen && (
+          <GrimpyWorkshopChat
+            ideas={workshopIdeas}
+            projectId={id}
+            onPlanGenerated={applyWorkshopPlan}
+            onClose={() => {
+              setGrimpyWorkshopOpen(false);
+              setWorkshopIdeas([]);
+            }}
+            theme={theme}
+          />
+        )}
+      </AnimatePresence>
       {loadError && (
         <div className="pointer-events-none absolute top-20 left-1/2 z-[120] -translate-x-1/2">
           <div
@@ -1507,10 +1624,11 @@ function ProjectContent({ id }: { id: string }) {
       )}
 
       {!isBathysphereActive && (
-        <MascotAgentPanel 
-          theme={theme} 
+        <MascotAgentPanel
+          theme={theme}
           onAppend={(msg) => append(msg)}
           onOpenResourceChamber={() => setResourceChamberOpen(true)}
+          onOpenThoughtPool={() => setThoughtPoolOpen(true)}
           dragConstraints={wrapperRef}
           activeMascot={activeMascot as any}
           onActiveMascotChange={setActiveMascot as any}

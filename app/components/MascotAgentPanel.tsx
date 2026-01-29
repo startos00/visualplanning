@@ -13,6 +13,7 @@ type MascotAgentPanelProps = {
   theme?: "abyss" | "surface";
   onAppend: (message: { role: "user"; content: string }) => void;
   onOpenResourceChamber: () => void;
+  onOpenThoughtPool?: () => void;
   dragConstraints?: React.RefObject<HTMLDivElement | null>;
   activeMascot: MascotVariant | null;
   onActiveMascotChange: (agent: MascotVariant | null) => void;
@@ -24,10 +25,11 @@ type Tool = {
   label: string;
 };
 
-export function MascotAgentPanel({ 
-  theme = "abyss", 
-  onAppend, 
-  onOpenResourceChamber, 
+export function MascotAgentPanel({
+  theme = "abyss",
+  onAppend,
+  onOpenResourceChamber,
+  onOpenThoughtPool,
   dragConstraints,
   activeMascot,
   onActiveMascotChange
@@ -75,7 +77,7 @@ export function MascotAgentPanel({
 
       // Grimpy Tools
       case "generateProjectPlan":
-        onAppend({ role: "user", content: "User requests a strategic plan. Please generate nodes." });
+        onOpenThoughtPool?.();
         break;
       case "linkStrategyToResources":
         onAppend({ role: "user", content: "Link my strategic goals to relevant research nodes." });

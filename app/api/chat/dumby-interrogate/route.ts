@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/app/lib/auth";
 import { streamText } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { openai, createOpenAI } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { google } from "@ai-sdk/google";
 import { getProviderAndModel } from "@/app/lib/ai/getUserPreferences";
@@ -87,6 +87,13 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
+    const openrouterKey = process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_KEY;
+    if (provider === "openrouter" && !openrouterKey) {
+      return NextResponse.json(
+        { error: "Missing OpenRouter API key in .env.local" },
+        { status: 500 }
+      );
+    }
 
     // Build the system prompt
     const systemPrompt = buildSystemPrompt(validIntent, documentTitle);
@@ -140,6 +147,13 @@ export async function POST(request: Request) {
       model = anthropic(modelId);
     } else if (provider === "google") {
       model = google(modelId);
+    } else if (provider === "openrouter") {
+      // OpenRouter uses OpenAI-compatible API
+      const openrouter = createOpenAI({
+        baseURL: "https://openrouter.ai/api/v1",
+        apiKey: openrouterKey,
+      });
+      model = openrouter(modelId);
     } else {
       model = openai(modelId);
     }

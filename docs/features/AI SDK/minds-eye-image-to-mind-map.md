@@ -20,8 +20,23 @@ As a user, I want to click a dedicated “Mind Map” action on an image node an
 - The action must be disabled (with a helpful tooltip) if there is no image.
 
 ### 2) Input
-- The client must send a **base64 image** string to a backend route dedicated to mind map generation, OR reuse the existing Mind’s Eye analyzer with a `mode`/`intent` flag.
-- The request must support switching between **GPT** and **Gemini Flash** (consistent with existing AI SDK options).
+- The client must send a **base64 image** string to a backend route dedicated to mind map generation, OR reuse the existing Mind's Eye analyzer with a `mode`/`intent` flag.
+- The request must support switching between multiple AI models (consistent with existing AI SDK options).
+
+#### Supported Providers & Models
+The model selection must include these models:
+
+##### Google (Gemini)
+- `gemini-2.5`
+- `gemini-3.0-flash`
+
+##### OpenAI
+- `gpt-4o`
+- `gpt-4o-mini`
+
+##### OpenRouter (or equivalent aggregator)
+- `xiaomi/mimo-v2-flash`
+- `allenai/molmo-2-8b:free`
 
 ### 3) Output Schema (Mind Map)
 The backend must return a schema-validated object representing a mind map:
@@ -71,7 +86,7 @@ No new database tables required for v1; rely on existing project graph persisten
 ## User Flow
 1. User uploads an image into a `media` node or sets a tracing image in a `lightbox` node.
 2. User clicks the **Mind Map** action.
-3. A modal opens with a preview + provider selection (GPT/Gemini Flash) and an **Analyze** button.
+3. A modal opens with a preview + provider/model selection and an **Analyze** button.
 4. The backend returns a schema-validated mind map.
 5. User clicks **Apply**.
 6. The app creates a single `mindmap` node on the canvas (anchored near the source image).
@@ -79,7 +94,7 @@ No new database tables required for v1; rely on existing project graph persisten
 ## Acceptance Criteria
 - ✅ “Mind Map” is available as a separate action on `media` and `lightbox` image nodes.
 - ✅ The backend returns a schema-validated mind map object.
-- ✅ The user can switch between **GPT** and **Gemini Flash** for this operation.
+- ✅ The user can switch between supported AI models for this operation.
 - ✅ Applying creates a new `mindmap` node with a readable layout of the mind map content.
 - ✅ Errors do not mutate the canvas and are clearly displayed.
 

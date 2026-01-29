@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/app/lib/auth";
 import { generateObject } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { openai, createOpenAI } from "@ai-sdk/openai";
 import { google } from "@ai-sdk/google";
 import { z } from "zod";
 
@@ -17,7 +17,7 @@ const schema = z.object({
 
 type AnalyzeSketchBody = {
   base64Image: string;
-  provider?: "openai" | "google";
+  provider?: "openai" | "google" | "openrouter";
   model?: string;
 };
 
@@ -47,16 +47,25 @@ export async function POST(request: Request) {
       );
     }
 
-    const provider: "openai" | "google" = body?.provider === "google" ? "google" : "openai";
+    const provider: "openai" | "google" | "openrouter" = body?.provider === "google" ? "google" : body?.provider === "openrouter" ? "openrouter" : "openai";
     const requestedModel = typeof body?.model === "string" ? body.model.trim() : "";
-    const modelId =
-      provider === "google"
-        ? (requestedModel === "gemini-2.5-flash" || requestedModel === "gemini-3-flash-preview"
-            ? requestedModel
-            : "gemini-2.5-flash")
-        : requestedModel === "gpt-4o"
-          ? "gpt-4o"
-          : "gpt-4o";
+    
+    // Supported models per provider (per FRED requirements)
+    const validModels = {
+      google: ["gemini-2.5", "gemini-3.0-flash", "gemini-2.5-flash", "gemini-3-flash-preview"],
+      openai: ["gpt-4o", "gpt-4o-mini"],
+      openrouter: ["xiaomi/mimo-v2-flash", "allenai/molmo-2-8b:free", "xiaomi/mimo-v2-flash:free"],
+    };
+    
+    const defaultModels = {
+      google: "gemini-2.5-flash",
+      openai: "gpt-4o",
+      openrouter: "xiaomi/mimo-v2-flash",
+    };
+    
+    const modelId = requestedModel && validModels[provider].includes(requestedModel)
+      ? requestedModel
+      : defaultModels[provider];
 
     if (provider === "openai" && !process.env.OPENAI_API_KEY) {
       return NextResponse.json({ error: "Missing OPENAI_API_KEY in .env.local" }, { status: 500 });
@@ -67,9 +76,30 @@ export async function POST(request: Request) {
         { status: 500 },
       );
     }
+    const openrouterKey = process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_KEY;
+    if (provider === "openrouter" && !openrouterKey) {
+      return NextResponse.json(
+        { error: "Missing OpenRouter API key in .env.local" },
+        { status: 500 },
+      );
+    }
+
+    let model;
+    if (provider === "google") {
+      model = google(modelId);
+    } else if (provider === "openrouter") {
+      // OpenRouter uses OpenAI-compatible API
+      const openrouter = createOpenAI({
+        baseURL: "https://openrouter.ai/api/v1",
+        apiKey: openrouterKey,
+      });
+      model = openrouter(modelId);
+    } else {
+      model = openai(modelId);
+    }
 
     const { object } = await generateObject({
-      model: provider === "google" ? google(modelId) : openai(modelId),
+      model,
       schema,
       messages: [
         {
