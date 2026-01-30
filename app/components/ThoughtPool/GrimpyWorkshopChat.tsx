@@ -19,7 +19,7 @@ import { Mascot } from "../Mascot";
 type Props = {
   ideas: Idea[];
   projectId: string;
-  onPlanGenerated: (plan: WorkshopPlan) => void;
+  onPlanGenerated: (plan: WorkshopPlan, keepIdeas: boolean, completedTacticIndexes: number[]) => void;
   onClose: () => void;
   theme?: "abyss" | "surface";
 };
@@ -34,13 +34,27 @@ type Message = {
 
 type PlanPreviewProps = {
   plan: WorkshopPlan;
-  onApply: () => void;
+  onApply: (keepIdeas: boolean, completedTacticIndexes: number[]) => void;
   theme?: "abyss" | "surface";
 };
 
 function PlanPreview({ plan, onApply, theme = "abyss" }: PlanPreviewProps) {
   const [expanded, setExpanded] = useState(true);
+  const [keepIdeas, setKeepIdeas] = useState(true);
+  const [completedTactics, setCompletedTactics] = useState<Set<number>>(new Set());
   const isSurface = theme === "surface";
+
+  const toggleTactic = (index: number) => {
+    setCompletedTactics((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  };
 
   return (
     <motion.div
@@ -127,47 +141,88 @@ function PlanPreview({ plan, onApply, theme = "abyss" }: PlanPreviewProps) {
               )}
 
               <div>
-                <span
-                  className={`text-[10px] font-bold uppercase tracking-wider ${
-                    isSurface ? "text-violet-500" : "text-violet-400/60"
-                  }`}
-                >
-                  Tasks ({plan.tactics.length})
-                </span>
-                <div className="mt-1 space-y-1 max-h-[120px] overflow-y-auto">
-                  {plan.tactics.slice(0, 8).map((t, i) => (
-                    <div
+                <div className="flex items-center justify-between">
+                  <span
+                    className={`text-[10px] font-bold uppercase tracking-wider ${
+                      isSurface ? "text-violet-500" : "text-violet-400/60"
+                    }`}
+                  >
+                    Tasks ({plan.tactics.length})
+                  </span>
+                  <span
+                    className={`text-[10px] ${
+                      isSurface ? "text-slate-500" : "text-violet-300/50"
+                    }`}
+                  >
+                    {completedTactics.size > 0 && `${completedTactics.size} done`}
+                  </span>
+                </div>
+                <div className="mt-1 space-y-1.5 max-h-[200px] overflow-y-auto">
+                  {plan.tactics.map((t, i) => (
+                    <label
                       key={i}
-                      className={`flex items-center gap-2 text-xs ${
-                        isSurface ? "text-violet-700" : "text-violet-200/80"
+                      className={`flex items-center gap-2 text-xs cursor-pointer group ${
+                        completedTactics.has(i)
+                          ? isSurface
+                            ? "text-slate-400"
+                            : "text-violet-300/40"
+                          : isSurface
+                            ? "text-violet-700"
+                            : "text-violet-200/80"
                       }`}
                     >
-                      <span
-                        className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold ${
+                      <input
+                        type="checkbox"
+                        checked={completedTactics.has(i)}
+                        onChange={() => toggleTactic(i)}
+                        className={`w-3.5 h-3.5 rounded border cursor-pointer flex-shrink-0 ${
                           isSurface
-                            ? "bg-cyan-100 text-cyan-600"
-                            : "bg-cyan-500/20 text-cyan-300"
+                            ? "border-slate-300 accent-emerald-500"
+                            : "border-violet-500/30 accent-emerald-400 bg-slate-800"
+                        }`}
+                      />
+                      <span
+                        className={`truncate ${
+                          completedTactics.has(i) ? "line-through" : ""
                         }`}
                       >
-                        {i + 1}
+                        {t.title}
                       </span>
-                      <span className="truncate">{t.title}</span>
-                    </div>
+                      {t.deadline && (
+                        <span
+                          className={`text-[9px] flex-shrink-0 ${
+                            isSurface ? "text-slate-400" : "text-violet-400/50"
+                          }`}
+                        >
+                          {t.deadline}
+                        </span>
+                      )}
+                    </label>
                   ))}
-                  {plan.tactics.length > 8 && (
-                    <span
-                      className={`text-[10px] ${
-                        isSurface ? "text-violet-500" : "text-violet-400/50"
-                      }`}
-                    >
-                      +{plan.tactics.length - 8} more tasks
-                    </span>
-                  )}
                 </div>
               </div>
 
+              {/* Keep ideas checkbox */}
+              <label
+                className={`flex items-center gap-2 cursor-pointer text-xs ${
+                  isSurface ? "text-slate-600" : "text-violet-200/70"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={keepIdeas}
+                  onChange={(e) => setKeepIdeas(e.target.checked)}
+                  className={`w-4 h-4 rounded border cursor-pointer ${
+                    isSurface
+                      ? "border-slate-300 accent-violet-500"
+                      : "border-violet-500/30 accent-violet-400 bg-slate-800"
+                  }`}
+                />
+                Keep ideas in Thought Pool
+              </label>
+
               <button
-                onClick={onApply}
+                onClick={() => onApply(keepIdeas, Array.from(completedTactics))}
                 className={`w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition-all ${
                   isSurface
                     ? "bg-emerald-500 text-white hover:bg-emerald-600"
@@ -352,9 +407,9 @@ export function GrimpyWorkshopChat({
     }
   }, [ideas, selectedTimeline, projectId, extractContextFromConversation]);
 
-  const handleApplyPlan = () => {
+  const handleApplyPlan = (keepIdeas: boolean, completedTacticIndexes: number[]) => {
     if (generatedPlan) {
-      onPlanGenerated(generatedPlan);
+      onPlanGenerated(generatedPlan, keepIdeas, completedTacticIndexes);
       onClose();
     }
   };

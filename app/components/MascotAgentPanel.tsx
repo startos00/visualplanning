@@ -1,11 +1,11 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Search, AlertTriangle, Calendar, Clock, Sparkles, 
+import {
+  Search, AlertTriangle, Calendar, Clock, Sparkles,
   Book, FileText, Youtube, Highlighter, ListChecks,
-  LayoutTemplate, Link as LinkIcon, Lightbulb, 
-  Network, MessageSquareQuote, Shuffle, Music
+  LayoutTemplate, Link as LinkIcon, Lightbulb,
+  Network, MessageSquareQuote, Shuffle, Music, ListTodo
 } from "lucide-react";
 import { Mascot, MascotVariant } from "./Mascot";
 
@@ -14,6 +14,7 @@ type MascotAgentPanelProps = {
   onAppend: (message: { role: "user"; content: string }) => void;
   onOpenResourceChamber: () => void;
   onOpenThoughtPool?: () => void;
+  onOpenTodoPanel?: () => void;
   dragConstraints?: React.RefObject<HTMLDivElement | null>;
   activeMascot: MascotVariant | null;
   onActiveMascotChange: (agent: MascotVariant | null) => void;
@@ -30,6 +31,7 @@ export function MascotAgentPanel({
   onAppend,
   onOpenResourceChamber,
   onOpenThoughtPool,
+  onOpenTodoPanel,
   dragConstraints,
   activeMascot,
   onActiveMascotChange
@@ -56,6 +58,9 @@ export function MascotAgentPanel({
         break;
       case "startOxygenTank":
         onAppend({ role: "user", content: "Start an Oxygen Tank dive session." });
+        break;
+      case "viewTodoList":
+        onOpenTodoPanel?.();
         break;
 
       // Dumby Tools
@@ -100,6 +105,7 @@ export function MascotAgentPanel({
 
   const agentTools: Record<MascotVariant, Tool[]> = {
     dumbo: [
+      { id: "viewTodoList", icon: ListTodo, label: "To-Do List" },
       { id: "checkDeadlines", icon: Search, label: "Scan Deadlines" },
       { id: "groupTasks", icon: Network, label: "Group Tasks" },
       { id: "setReminder", icon: Clock, label: "Set Reminder" },

@@ -46,6 +46,7 @@ import type { Idea, WorkshopPlan } from "@/app/lib/db/schema";
 import { markIdeaProcessed } from "@/app/actions/ideas";
 import { MascotAgentPanel } from "@/app/components/MascotAgentPanel";
 import { CreationDock } from "@/app/components/CreationDock";
+import { TodoPanel } from "@/app/components/TodoPanel";
 import type { GrimpoNode } from "@/app/lib/graph";
 import { useChat, Chat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
@@ -239,6 +240,7 @@ function ProjectContent({ id }: { id: string }) {
   const [thoughtPoolOpen, setThoughtPoolOpen] = useState(false);
   const [grimpyWorkshopOpen, setGrimpyWorkshopOpen] = useState(false);
   const [workshopIdeas, setWorkshopIdeas] = useState<Idea[]>([]);
+  const [todoPanelOpen, setTodoPanelOpen] = useState(false);
 
   useEffect(() => {
     // #region agent log
@@ -275,6 +277,17 @@ function ProjectContent({ id }: { id: string }) {
           duration: 1000,
         });
       }
+    }
+  }, [nodes]);
+
+  // Focus on a specific node (for TodoPanel)
+  const focusNode = useCallback((nodeId: string) => {
+    const node = nodes.find(n => n.id === nodeId);
+    if (node && rfRef.current) {
+      rfRef.current.setCenter(node.position.x + 150, node.position.y + 100, {
+        zoom: 1.2,
+        duration: 800,
+      });
     }
   }, [nodes]);
   
@@ -763,7 +776,7 @@ function ProjectContent({ id }: { id: string }) {
   );
 
   const applyWorkshopPlan = useCallback(
-    async (plan: WorkshopPlan) => {
+    async (plan: WorkshopPlan, keepIdeas: boolean = true, completedTacticIndexes: number[] = []) => {
       const anchor = getViewportCenterFlowPosition();
       const now = Date.now();
       const strategyId = `strategy-${now}`;
@@ -793,6 +806,7 @@ function ProjectContent({ id }: { id: string }) {
       }));
 
       // Create tactical nodes with deadlines
+      const completedSet = new Set(completedTacticIndexes);
       const tacticNodes: GrimpoNode[] = plan.tactics.map((t, index) => ({
         id: `tactical-${now}-${index}`,
         type: "tactical",
@@ -800,8 +814,8 @@ function ProjectContent({ id }: { id: string }) {
         data: {
           title: t.title,
           notes: t.description || "",
-          status: "todo",
-          deadline: t.deadline,
+          status: completedSet.has(index) ? "done" : "todo",
+          planDeadline: t.deadline, // Relative deadline: "Day 1", "Week 1", etc.
           color: "#22d3ee",
         } as any,
       }));
@@ -826,9 +840,11 @@ function ProjectContent({ id }: { id: string }) {
       setNodes((nds) => nds.concat([strategyNode, ...milestoneNodes, ...tacticNodes]));
       setEdges((eds) => eds.concat([...milestoneEdges, ...tacticEdges] as any));
 
-      // Mark ideas as processed
-      for (const idea of workshopIdeas) {
-        await markIdeaProcessed(idea.id);
+      // Only mark ideas as processed if user chose not to keep them
+      if (!keepIdeas) {
+        for (const idea of workshopIdeas) {
+          await markIdeaProcessed(idea.id);
+        }
       }
 
       setGrimpyWorkshopOpen(false);
@@ -1204,6 +1220,24 @@ function ProjectContent({ id }: { id: string }) {
               setGrimpyWorkshopOpen(false);
               setWorkshopIdeas([]);
             }}
+            theme={theme}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {todoPanelOpen && (
+          <TodoPanel
+            nodes={nodes}
+            edges={edges}
+            onUpdateNode={(nodeId, patch) => {
+              setNodes((nds) =>
+                nds.map((n) =>
+                  n.id === nodeId ? { ...n, data: { ...n.data, ...patch } } : n
+                )
+              );
+            }}
+            onClose={() => setTodoPanelOpen(false)}
+            onFocusNode={focusNode}
             theme={theme}
           />
         )}
@@ -1629,6 +1663,7 @@ function ProjectContent({ id }: { id: string }) {
           onAppend={(msg) => append(msg)}
           onOpenResourceChamber={() => setResourceChamberOpen(true)}
           onOpenThoughtPool={() => setThoughtPoolOpen(true)}
+          onOpenTodoPanel={() => setTodoPanelOpen(true)}
           dragConstraints={wrapperRef}
           activeMascot={activeMascot as any}
           onActiveMascotChange={setActiveMascot as any}

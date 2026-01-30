@@ -474,6 +474,19 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
             </div>
             {!isTrace && (
               <div className="flex items-center gap-2 pointer-events-auto">
+                {/* Plan deadline badge (e.g., "Day 1", "Week 1") */}
+                {type === "tactical" && data.planDeadline && (
+                  <span
+                    className={`rounded-full px-2 py-1 text-[10px] font-bold ${
+                      isSurface
+                        ? "bg-amber-100 text-amber-700"
+                        : "bg-amber-500/20 text-amber-300"
+                    }`}
+                    title="Plan timeline"
+                  >
+                    {data.planDeadline}
+                  </span>
+                )}
                 <div className="relative flex items-center">
                   <input
                     type="date"

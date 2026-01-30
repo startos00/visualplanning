@@ -125,6 +125,7 @@ Important guidelines:
 - User clicks "Generate Plan" when ready
 - Plan preview displayed inline in chat (collapsible)
 - "Apply to Canvas" button appears after plan generation
+- **"Keep ideas in Thought Pool" checkbox** (checked by default) lets user choose whether to retain ideas after applying plan
 - User can have follow-up conversation to refine requirements
 
 ### 6. Image/Sketch Understanding
@@ -298,7 +299,7 @@ export async function POST(request: Request) {
 type GrimpyWorkshopChatProps = {
   ideas: Idea[];
   projectId: string;
-  onPlanGenerated: (plan: WorkshopPlan) => void;
+  onPlanGenerated: (plan: WorkshopPlan, keepIdeas: boolean) => void;
   onClose: () => void;
   theme?: "abyss" | "surface";
 };
@@ -396,6 +397,7 @@ function IdeaCard({ idea, onSendToGrimpy }: Props) {
 ```tsx
 function PlanPreview({ plan, onApply, theme }: Props) {
   const [expanded, setExpanded] = useState(true);
+  const [keepIdeas, setKeepIdeas] = useState(true); // Default: keep ideas
 
   return (
     <div className="plan-preview">
@@ -426,7 +428,17 @@ function PlanPreview({ plan, onApply, theme }: Props) {
         </div>
       )}
 
-      <button onClick={() => onApply(plan)} className="apply-button">
+      {/* User choice: keep or archive ideas */}
+      <label className="keep-ideas-checkbox">
+        <input
+          type="checkbox"
+          checked={keepIdeas}
+          onChange={(e) => setKeepIdeas(e.target.checked)}
+        />
+        Keep ideas in Thought Pool
+      </label>
+
+      <button onClick={() => onApply(keepIdeas)} className="apply-button">
         <CheckCircle className="h-4 w-4" />
         Apply to Canvas
       </button>
@@ -516,6 +528,7 @@ Week 2: Launch
 - [x] Plan generation happens via dedicated endpoint with structured output
 - [x] Plan preview displayed inline in chat with expand/collapse
 - [x] "Apply to Canvas" button spawns nodes from the generated plan
+- [x] "Keep ideas in Thought Pool" checkbox gives user control over idea retention
 - [x] Streaming responses show Grimpy "typing" in real-time
 - [x] Error states handled gracefully (API failures, timeouts)
 - [x] Theme support (Abyss/Surface)

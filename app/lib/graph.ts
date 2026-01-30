@@ -25,6 +25,7 @@ export type GrimpoNodeData = {
   mindmap?: MindMapData;
   // Tactical only:
   status?: TacticalStatus;
+  planDeadline?: string; // Relative deadline from plan: "Day 1", "Week 1", etc.
   // Visual customization:
   deadline?: string; // ISO date string: "YYYY-MM-DD"
   color?: string; // Hex color string: "#22d3ee"
