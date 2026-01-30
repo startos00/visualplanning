@@ -47,6 +47,7 @@ import { markIdeaProcessed } from "@/app/actions/ideas";
 import { MascotAgentPanel } from "@/app/components/MascotAgentPanel";
 import { CreationDock } from "@/app/components/CreationDock";
 import { TodoPanel } from "@/app/components/TodoPanel";
+import { ExecutionModePanel } from "@/app/components/ExecutionMode";
 import type { GrimpoNode } from "@/app/lib/graph";
 import { useChat, Chat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
@@ -241,6 +242,7 @@ function ProjectContent({ id }: { id: string }) {
   const [grimpyWorkshopOpen, setGrimpyWorkshopOpen] = useState(false);
   const [workshopIdeas, setWorkshopIdeas] = useState<Idea[]>([]);
   const [todoPanelOpen, setTodoPanelOpen] = useState(false);
+  const [executionModeOpen, setExecutionModeOpen] = useState(false);
 
   useEffect(() => {
     // #region agent log
@@ -290,6 +292,28 @@ function ProjectContent({ id }: { id: string }) {
       });
     }
   }, [nodes]);
+
+  // Keyboard shortcut for Execution Mode (E key)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        (e.target as HTMLElement)?.isContentEditable
+      ) {
+        return;
+      }
+
+      if (e.key === "e" || e.key === "E") {
+        e.preventDefault();
+        setExecutionModeOpen((prev) => !prev);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
   
   const [input, setInput] = useState("");
   const [chatData, setChatData] = useState<any[]>([]);
@@ -1242,6 +1266,24 @@ function ProjectContent({ id }: { id: string }) {
           />
         )}
       </AnimatePresence>
+      <AnimatePresence>
+        {executionModeOpen && (
+          <ExecutionModePanel
+            nodes={nodes}
+            edges={edges}
+            onUpdateNode={(nodeId, patch) => {
+              setNodes((nds) =>
+                nds.map((n) =>
+                  n.id === nodeId ? { ...n, data: { ...n.data, ...patch } } : n
+                )
+              );
+            }}
+            onClose={() => setExecutionModeOpen(false)}
+            onFocusNode={focusNode}
+            theme={theme}
+          />
+        )}
+      </AnimatePresence>
       {loadError && (
         <div className="pointer-events-none absolute top-20 left-1/2 z-[120] -translate-x-1/2">
           <div
@@ -1477,7 +1519,8 @@ function ProjectContent({ id }: { id: string }) {
             multiSelectionKeyCode="Shift"
           >
             <Background 
-              gap={32} 
+              gap={32}
+              offset={2}
               variant={theme === "surface" ? BackgroundVariant.Lines : BackgroundVariant.Dots}
               color={theme === "abyss" ? "rgba(255,255,255,0.04)" : "#e2e8f0"} 
             />
@@ -1664,6 +1707,7 @@ function ProjectContent({ id }: { id: string }) {
           onOpenResourceChamber={() => setResourceChamberOpen(true)}
           onOpenThoughtPool={() => setThoughtPoolOpen(true)}
           onOpenTodoPanel={() => setTodoPanelOpen(true)}
+          onOpenExecutionMode={() => setExecutionModeOpen(true)}
           dragConstraints={wrapperRef}
           activeMascot={activeMascot as any}
           onActiveMascotChange={setActiveMascot as any}

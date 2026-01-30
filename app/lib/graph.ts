@@ -2,7 +2,7 @@ import type { Edge, Node } from "reactflow";
 
 export type NodeKind = "strategy" | "tactical" | "resource" | "sketch" | "media" | "lightbox" | "mindmap";
 export type ModeSetting = "auto" | "strategy" | "tactical";
-export type TacticalStatus = "todo" | "done";
+export type TacticalStatus = "todo" | "in_progress" | "done";
 
 export type MindMapData = {
   root: { title: string };

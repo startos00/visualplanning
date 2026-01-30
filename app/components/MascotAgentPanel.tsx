@@ -5,7 +5,8 @@ import {
   Search, AlertTriangle, Calendar, Clock, Sparkles,
   Book, FileText, Youtube, Highlighter, ListChecks,
   LayoutTemplate, Link as LinkIcon, Lightbulb,
-  Network, MessageSquareQuote, Shuffle, Music, ListTodo
+  Network, MessageSquareQuote, Shuffle, Music, ListTodo,
+  Target
 } from "lucide-react";
 import { Mascot, MascotVariant } from "./Mascot";
 
@@ -15,6 +16,7 @@ type MascotAgentPanelProps = {
   onOpenResourceChamber: () => void;
   onOpenThoughtPool?: () => void;
   onOpenTodoPanel?: () => void;
+  onOpenExecutionMode?: () => void;
   dragConstraints?: React.RefObject<HTMLDivElement | null>;
   activeMascot: MascotVariant | null;
   onActiveMascotChange: (agent: MascotVariant | null) => void;
@@ -32,6 +34,7 @@ export function MascotAgentPanel({
   onOpenResourceChamber,
   onOpenThoughtPool,
   onOpenTodoPanel,
+  onOpenExecutionMode,
   dragConstraints,
   activeMascot,
   onActiveMascotChange
@@ -61,6 +64,9 @@ export function MascotAgentPanel({
         break;
       case "viewTodoList":
         onOpenTodoPanel?.();
+        break;
+      case "openExecutionMode":
+        onOpenExecutionMode?.();
         break;
 
       // Dumby Tools
@@ -105,6 +111,7 @@ export function MascotAgentPanel({
 
   const agentTools: Record<MascotVariant, Tool[]> = {
     dumbo: [
+      { id: "openExecutionMode", icon: Target, label: "Execute" },
       { id: "viewTodoList", icon: ListTodo, label: "To-Do List" },
       { id: "checkDeadlines", icon: Search, label: "Scan Deadlines" },
       { id: "groupTasks", icon: Network, label: "Group Tasks" },
