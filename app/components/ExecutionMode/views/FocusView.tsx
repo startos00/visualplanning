@@ -99,7 +99,7 @@ export function FocusView({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="flex-1 flex flex-col items-center justify-center p-8"
+        className="absolute inset-0 flex flex-col items-center justify-center p-8"
       >
         <div
           className={`text-center ${
@@ -121,7 +121,7 @@ export function FocusView({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="flex-1 flex flex-col items-center justify-center p-8 overflow-y-auto"
+      className="absolute inset-0 flex flex-col items-center justify-center p-8 overflow-y-auto"
     >
       {/* Navigation */}
       <div className="flex items-center gap-4 mb-8">

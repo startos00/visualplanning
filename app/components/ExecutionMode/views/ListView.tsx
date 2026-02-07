@@ -129,7 +129,7 @@ export function ListView({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="flex-1 flex flex-col overflow-hidden"
+      className="absolute inset-0 flex flex-col overflow-hidden"
     >
       {/* Filter tabs */}
       <div

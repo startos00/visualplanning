@@ -131,9 +131,9 @@ export function KanbanView({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="flex-1 overflow-x-auto p-4"
+      className="absolute inset-0 overflow-x-auto overflow-y-hidden p-4"
     >
-      <div className="flex gap-4 min-w-max h-full">
+      <div className="flex gap-4 min-w-max h-full pb-2">
         {columns.map((column) => {
           const columnTasks = tasksByStatus[column.id];
           const isOver = dragOverColumn === column.id;
@@ -141,7 +141,7 @@ export function KanbanView({
           return (
             <div
               key={column.id}
-              className="flex flex-col w-[280px] flex-shrink-0"
+              className="flex flex-col w-[280px] flex-shrink-0 h-full"
               onDragOver={(e) => handleDragOver(e, column.id)}
               onDragLeave={handleDragLeave}
               onDrop={(e) => handleDrop(e, column.id)}
@@ -171,7 +171,7 @@ export function KanbanView({
 
               {/* Column content */}
               <div
-                className={`flex-1 p-2 rounded-b-xl border-2 border-t-0 transition-colors min-h-[200px] ${
+                className={`flex-1 p-2 rounded-b-xl border-2 border-t-0 transition-colors min-h-0 overflow-y-auto ${
                   isOver
                     ? isSurface
                       ? "border-emerald-300 bg-emerald-50/50"
@@ -181,7 +181,7 @@ export function KanbanView({
                       : "border-cyan-500/10 bg-slate-900/20"
                 }`}
               >
-                <div className="space-y-2">
+                <div className="space-y-2 pb-2">
                   {columnTasks.map((task) => {
                     const strategyTitle = getStrategyTitle(task.id);
                     const isDragging = draggedTaskId === task.id;

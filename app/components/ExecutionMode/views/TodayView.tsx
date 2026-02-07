@@ -178,7 +178,7 @@ export function TodayView({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="flex-1 overflow-y-auto p-4"
+      className="absolute inset-0 overflow-y-auto p-4"
     >
       {/* Header */}
       <div className="mb-6">
