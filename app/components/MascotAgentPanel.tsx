@@ -6,7 +6,7 @@ import {
   Book, FileText, Youtube, Highlighter, ListChecks,
   LayoutTemplate, Link as LinkIcon, Lightbulb,
   Network, MessageSquareQuote, Shuffle, Music, ListTodo,
-  Target
+  Target, MessageCircle
 } from "lucide-react";
 import { Mascot, MascotVariant } from "./Mascot";
 
@@ -17,6 +17,7 @@ type MascotAgentPanelProps = {
   onOpenThoughtPool?: () => void;
   onOpenTodoPanel?: () => void;
   onOpenExecutionMode?: () => void;
+  onOpenChat?: (agent: MascotVariant) => void;
   dragConstraints?: React.RefObject<HTMLDivElement | null>;
   activeMascot: MascotVariant | null;
   onActiveMascotChange: (agent: MascotVariant | null) => void;
@@ -35,6 +36,7 @@ export function MascotAgentPanel({
   onOpenThoughtPool,
   onOpenTodoPanel,
   onOpenExecutionMode,
+  onOpenChat,
   dragConstraints,
   activeMascot,
   onActiveMascotChange
@@ -67,6 +69,9 @@ export function MascotAgentPanel({
         break;
       case "openExecutionMode":
         onOpenExecutionMode?.();
+        break;
+      case "openChat":
+        onOpenChat?.(agent);
         break;
 
       // Dumby Tools
@@ -111,6 +116,7 @@ export function MascotAgentPanel({
 
   const agentTools: Record<MascotVariant, Tool[]> = {
     dumbo: [
+      { id: "openChat", icon: MessageCircle, label: "Chat" },
       { id: "openExecutionMode", icon: Target, label: "Execute" },
       { id: "viewTodoList", icon: ListTodo, label: "To-Do List" },
       { id: "checkDeadlines", icon: Search, label: "Scan Deadlines" },
@@ -121,6 +127,7 @@ export function MascotAgentPanel({
       { id: "startOxygenTank", icon: Sparkles, label: "Oxygen Dive" },
     ],
     dumby: [
+      { id: "openChat", icon: MessageCircle, label: "Chat" },
       { id: "resourceChamber", icon: Book, label: "Resource Chamber" },
       { id: "summarizePDF", icon: FileText, label: "Summarize PDF" },
       { id: "summarizeVideo", icon: Youtube, label: "Summarize Video" },
@@ -128,6 +135,7 @@ export function MascotAgentPanel({
       { id: "manageQueue", icon: ListChecks, label: "Manage Queue" },
     ],
     grimpy: [
+      { id: "openChat", icon: MessageCircle, label: "Chat" },
       { id: "generateProjectPlan", icon: LayoutTemplate, label: "Generate Plan" },
       { id: "linkStrategyToResources", icon: LinkIcon, label: "Link Strategy" },
       { id: "suggestResources", icon: Lightbulb, label: "Suggest Resources" },

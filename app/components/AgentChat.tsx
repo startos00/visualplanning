@@ -22,6 +22,8 @@ type AgentChatProps = {
   agent: MascotVariant;
   onAgentChange: (agent: MascotVariant) => void;
   theme?: "abyss" | "surface";
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 const PROVIDER_LABELS: Record<Provider, string> = {
@@ -31,9 +33,19 @@ const PROVIDER_LABELS: Record<Provider, string> = {
   openrouter: "OpenRouter",
 };
 
-export function AgentChat({ chat, agent, onAgentChange, theme = "abyss" }: AgentChatProps) {
+export function AgentChat({ chat, agent, onAgentChange, theme = "abyss", isOpen: externalIsOpen, onOpenChange }: AgentChatProps) {
   const { messages, input, setInput, handleSubmit, append, isLoading } = chat;
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
+
+  // Use external control if provided, otherwise use internal state
+  const isOpen = externalIsOpen !== undefined ? externalIsOpen : internalIsOpen;
+  const setIsOpen = (open: boolean) => {
+    if (onOpenChange) {
+      onOpenChange(open);
+    } else {
+      setInternalIsOpen(open);
+    }
+  };
   const isSurface = theme === "surface";
   const [isMinimized, setIsMinimized] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -150,19 +162,10 @@ export function AgentChat({ chat, agent, onAgentChange, theme = "abyss" }: Agent
     grimpy: isSurface ? "from-cyan-50 to-white" : "from-cyan-900/60 to-slate-950",
   };
 
+  // If externally controlled and closed, render nothing
+  // If internally controlled and closed, also render nothing (no standalone button anymore)
   if (!isOpen) {
-    return (
-      <button
-        onClick={() => setIsOpen(true)}
-        className={`fixed bottom-[84px] right-6 z-[50] flex h-14 w-14 items-center justify-center rounded-full border backdrop-blur-md transition-all hover:scale-110 ${
-          isSurface
-            ? "border-slate-300 bg-white text-slate-700 shadow-lg hover:bg-slate-50"
-            : "border-cyan-400/30 bg-slate-950/80 text-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.3)] hover:border-cyan-400/50"
-        }`}
-      >
-        <MessageCircle className="h-6 w-6" />
-      </button>
-    );
+    return null;
   }
 
   return (

@@ -243,6 +243,7 @@ function ProjectContent({ id }: { id: string }) {
   const [workshopIdeas, setWorkshopIdeas] = useState<Idea[]>([]);
   const [todoPanelOpen, setTodoPanelOpen] = useState(false);
   const [executionModeOpen, setExecutionModeOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
 
   useEffect(() => {
     // #region agent log
@@ -1708,6 +1709,10 @@ function ProjectContent({ id }: { id: string }) {
           onOpenThoughtPool={() => setThoughtPoolOpen(true)}
           onOpenTodoPanel={() => setTodoPanelOpen(true)}
           onOpenExecutionMode={() => setExecutionModeOpen(true)}
+          onOpenChat={(agent) => {
+            setCurrentAgent(agent);
+            setChatOpen(true);
+          }}
           dragConstraints={wrapperRef}
           activeMascot={activeMascot as any}
           onActiveMascotChange={setActiveMascot as any}
@@ -1734,11 +1739,13 @@ function ProjectContent({ id }: { id: string }) {
         </div>
       )}
 
-      <AgentChat 
+      <AgentChat
         chat={{ messages, input, setInput, handleSubmit, append, isLoading }}
         agent={currentAgent}
         onAgentChange={setCurrentAgent}
-        theme={theme} 
+        theme={theme}
+        isOpen={chatOpen}
+        onOpenChange={setChatOpen}
       />
     </div>
   );
