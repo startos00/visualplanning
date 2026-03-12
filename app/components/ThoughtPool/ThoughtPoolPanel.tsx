@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useReactFlow } from "reactflow";
 import {
   X,
@@ -15,7 +15,7 @@ import {
   Image as ImageIcon,
   CheckCircle2,
   Send,
-  MessageSquare,
+  GripHorizontal,
 } from "lucide-react";
 import { motion, AnimatePresence, Reorder } from "framer-motion";
 import type { GrimpoNodeData } from "@/app/lib/graph";
@@ -59,6 +59,51 @@ export function ThoughtPoolPanel({
   const [editContent, setEditContent] = useState("");
 
   const isSurface = theme === "surface";
+
+  // Draggable panel state
+  const [position, setPosition] = useState({ x: typeof window !== "undefined" ? window.innerWidth - 400 : 600, y: 20 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragOffset = useRef({ x: 0, y: 0 });
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Reset position when panel opens
+  useEffect(() => {
+    if (isOpen) {
+      setPosition({ x: window.innerWidth - 400, y: 20 });
+    }
+  }, [isOpen]);
+
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    // Don't drag if clicking a button
+    if ((e.target as HTMLElement).closest("button")) return;
+    setIsDragging(true);
+    dragOffset.current = {
+      x: e.clientX - position.x,
+      y: e.clientY - position.y,
+    };
+    e.preventDefault();
+  }, [position]);
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const newX = Math.max(0, Math.min(window.innerWidth - 370, e.clientX - dragOffset.current.x));
+      const newY = Math.max(0, Math.min(window.innerHeight - 100, e.clientY - dragOffset.current.y));
+      setPosition({ x: newX, y: newY });
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isDragging]);
 
   // Fetch ideas when panel opens
   useEffect(() => {
@@ -200,29 +245,34 @@ export function ThoughtPoolPanel({
     onOpenWorkshop?.(toWorkshop);
   };
 
+  if (!isOpen) return null;
+
   return (
     <>
-      {/* Backdrop for mobile */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 z-[55] bg-black/40 backdrop-blur-sm md:hidden"
-          onClick={onClose}
-        />
-      )}
-
-      {/* Sidebar Panel */}
-      <aside
-        className={`fixed right-0 top-0 z-[60] h-full w-[360px] flex flex-col transform border-l transition-transform duration-500 ease-in-out ${
-          isOpen ? "translate-x-0" : "translate-x-full"
-        } ${
+      {/* Floating Draggable Panel */}
+      <div
+        ref={panelRef}
+        style={{
+          position: "fixed",
+          left: position.x,
+          top: position.y,
+          zIndex: 60,
+          width: 370,
+          maxHeight: `calc(100vh - ${position.y}px - 20px)`,
+          userSelect: isDragging ? "none" : "auto",
+        }}
+        className={`flex flex-col rounded-2xl border shadow-2xl ${
           isSurface
-            ? "border-slate-200 bg-white/95 shadow-[-10px_0_30px_rgba(0,0,0,0.1)]"
-            : "border-cyan-500/20 bg-slate-900/95 shadow-[-10px_0_30px_rgba(34,211,238,0.1)] backdrop-blur-xl"
+            ? "border-slate-200 bg-white/95 shadow-[0_8px_40px_rgba(0,0,0,0.15)]"
+            : "border-cyan-500/20 bg-slate-900/95 shadow-[0_8px_40px_rgba(34,211,238,0.12)] backdrop-blur-xl"
         }`}
       >
-        {/* Header */}
+        {/* Drag Handle Header */}
         <div
-          className={`flex-shrink-0 flex items-center justify-between border-b px-5 py-4 ${
+          onMouseDown={handleDragStart}
+          className={`flex-shrink-0 flex items-center justify-between border-b rounded-t-2xl px-5 py-3 ${
+            isDragging ? "cursor-grabbing" : "cursor-grab"
+          } ${
             isSurface
               ? "border-slate-200 bg-gradient-to-r from-cyan-50 to-transparent"
               : "border-cyan-500/20 bg-gradient-to-r from-cyan-500/10 to-transparent"
@@ -257,16 +307,23 @@ export function ThoughtPoolPanel({
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className={`rounded-full p-1.5 transition-colors ${
-              isSurface
-                ? "text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                : "text-cyan-200/50 hover:bg-cyan-500/20 hover:text-cyan-200"
-            }`}
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <GripHorizontal
+              className={`h-4 w-4 ${
+                isSurface ? "text-slate-300" : "text-cyan-300/30"
+              }`}
+            />
+            <button
+              onClick={onClose}
+              className={`rounded-full p-1.5 transition-colors ${
+                isSurface
+                  ? "text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                  : "text-cyan-200/50 hover:bg-cyan-500/20 hover:text-cyan-200"
+              }`}
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         {/* Quick Input */}
@@ -428,7 +485,7 @@ export function ThoughtPoolPanel({
         </AnimatePresence>
 
         {/* Ideas List */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-24 custom-scrollbar">
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 custom-scrollbar">
           {ideas.length > 0 ? (
             viewMode === "list" ? (
               <Reorder.Group
@@ -732,7 +789,7 @@ export function ThoughtPoolPanel({
         {/* Workshop with Grimpy Button */}
         {ideas.length > 0 && (
           <div
-            className={`absolute bottom-0 left-0 right-0 p-4 border-t ${
+            className={`flex-shrink-0 rounded-b-2xl p-4 border-t ${
               isSurface
                 ? "border-slate-200 bg-white/95"
                 : "border-cyan-500/20 bg-slate-900/95 backdrop-blur-xl"
@@ -760,7 +817,7 @@ export function ThoughtPoolPanel({
             </button>
           </div>
         )}
-      </aside>
+      </div>
 
       <style jsx>{`
         .custom-scrollbar {
