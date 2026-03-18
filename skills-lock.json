@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "3d-web-experience": {
+      "source": "davila7/claude-code-templates",
+      "sourceType": "github",
+      "computedHash": "0d8ab488cd3320fbe88e0d276ad9786030a89a1772a325bd378610e0cb9483ef"
+    }
+  }
+}
