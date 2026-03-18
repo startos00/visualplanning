@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ExternalLink, Sparkles, Target, Wrench, X, Maximize2 } from "lucide-react";
+import { ExternalLink, Sparkles, Wrench, X, Maximize2, Star, Eye, Compass, Repeat } from "lucide-react";
 import type { NodeProps } from "reactflow";
 import { Handle, Position } from "reactflow";
 import type { GrimpoNodeData, ModeSetting, NodeKind } from "@/app/lib/graph";
@@ -54,8 +54,14 @@ function hexToRgba(hex: string, opacity: number): string {
 
 function typeBadge(type: NodeKind) {
   switch (type) {
+    case "northstar":
+      return { label: "NORTH STAR", Icon: Star };
+    case "vision":
+      return { label: "VISION", Icon: Eye };
     case "strategy":
-      return { label: "STRATEGY", Icon: Target };
+      return { label: "STRATEGY", Icon: Compass };
+    case "operations":
+      return { label: "OPERATIONS", Icon: Repeat };
     case "tactical":
       return { label: "TACTICAL", Icon: Wrench };
     case "resource":
@@ -417,7 +423,7 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
       )}
       <div
         className={[
-          "relative w-[320px] rounded-3xl border transition-all duration-300",
+          "relative w-[340px] rounded-3xl border transition-all duration-300",
           containerClasses,
           done ? "opacity-60" : "",
           swallowing ? "scale-0 opacity-0" : "",
@@ -439,30 +445,58 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
           <div className="pointer-events-none absolute inset-0 rounded-[22px] bg-gradient-to-b from-white/10 to-transparent" />
         )}
 
-        {!isTrace && (
-          <>
-            <Handle
-              type="target"
-              position={Position.Left}
-              className={`${handleClass} !left-0 !top-1/2 !translate-x-[-50%] !translate-y-[-50%]`}
-              style={handleStyleAttr}
-            />
-            <Handle
-              type="source"
-              position={Position.Right}
-              className={`${handleClass} !right-0 !top-1/2 !translate-x-[50%] !translate-y-[-50%]`}
-              style={handleStyleAttr}
-            />
-          </>
-        )}
+        {!isTrace && (() => {
+          // North Star & Vision: only top/bottom handles (pure hierarchy nodes)
+          const isHierarchyOnly = nodeKind === "northstar" || nodeKind === "vision";
 
-        <div className={`relative p-4 ${isTrace ? "" : "drag-handle cursor-grab active:cursor-grabbing"}`}>
-          <div className="mb-3 flex items-center justify-between gap-3 pointer-events-none">
+          return (
+            <>
+              {/* Top / Bottom handles — for vertical hierarchy */}
+              <Handle
+                type="target"
+                position={Position.Top}
+                id="top"
+                className={`${handleClass} !left-1/2 !top-0 !translate-x-[-50%] !translate-y-[-50%]`}
+                style={handleStyleAttr}
+              />
+              <Handle
+                type="source"
+                position={Position.Bottom}
+                id="bottom"
+                className={`${handleClass} !left-1/2 !bottom-0 !translate-x-[-50%] !translate-y-[50%]`}
+                style={handleStyleAttr}
+              />
+              {/* Left / Right handles — for all other node types */}
+              {!isHierarchyOnly && (
+                <>
+                  <Handle
+                    type="target"
+                    position={Position.Left}
+                    id="left"
+                    className={`${handleClass} !left-0 !top-1/2 !translate-x-[-50%] !translate-y-[-50%]`}
+                    style={handleStyleAttr}
+                  />
+                  <Handle
+                    type="source"
+                    position={Position.Right}
+                    id="right"
+                    className={`${handleClass} !right-0 !top-1/2 !translate-x-[50%] !translate-y-[-50%]`}
+                    style={handleStyleAttr}
+                  />
+                </>
+              )}
+            </>
+          );
+        })()}
+
+        <div className={`relative p-5 ${isTrace ? "" : "drag-handle cursor-grab active:cursor-grabbing"}`}>
+          {/* ── Header: badge row ── */}
+          <div className="mb-2 flex items-center gap-2 pointer-events-none">
             <div className={`flex items-center gap-2 text-xs tracking-widest ${isSurface && data.color ? '' : textSecondary} ${isTrace ? "opacity-50" : ""}`}>
               {badge && <badge.Icon className={`h-4 w-4 ${isSurface && data.color ? '' : textSecondary}`} style={isSurface && data.color ? { color: selectedColor } : {}} />}
-              <span 
-                className={`rounded-full border px-2 py-1 transition-colors ${inputBorder} ${inputBg}`}
-                style={isSurface && data.color && !isTrace ? { 
+              <span
+                className={`rounded-full border px-2 py-0.5 transition-colors ${inputBorder} ${inputBg}`}
+                style={isSurface && data.color && !isTrace ? {
                   backgroundColor: hexToRgba(selectedColor, 0.15),
                   borderColor: hexToRgba(selectedColor, 0.3),
                   color: selectedColor,
@@ -472,51 +506,22 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                 {badge?.label} {isTrace && "(Trace)"}
               </span>
             </div>
-            {!isTrace && (
-              <div className="flex items-center gap-2 pointer-events-auto">
-                {/* Plan deadline badge (e.g., "Day 1", "Week 1") */}
-                {type === "tactical" && data.planDeadline && (
-                  <span
-                    className={`rounded-full px-2 py-1 text-[10px] font-bold ${
-                      isSurface
-                        ? "bg-amber-100 text-amber-700"
-                        : "bg-amber-500/20 text-amber-300"
-                    }`}
-                    title="Plan timeline"
-                  >
-                    {data.planDeadline}
-                  </span>
-                )}
-                <div className="relative flex items-center">
-                  <input
-                    type="date"
-                    value={data.deadline ?? ""}
-                    onChange={(e) => {
-                      const value = e.target.value || undefined;
-                      data.onUpdate?.(id, { deadline: value });
-                    }}
-                    className={`h-7 rounded-full border ${inputBorder} ${inputBg} px-3 text-[10px] ${isSurface ? 'text-slate-700' : 'text-cyan-50/80'} outline-none transition-all hover:opacity-80 focus:ring-1 focus:ring-cyan-300/20`}
-                    title="Set deadline"
-                  />
-                </div>
-                {type === "resource" && !titleOnly && data.link ? (
-                  <button
-                    onClick={() => window.open(data.link, "_blank", "noopener,noreferrer")}
-                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs transition-colors ${
-                      isSurface 
-                        ? "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200" 
-                        : "border-rose-300/20 bg-rose-500/10 text-rose-200 shadow-[0_0_14px_rgba(244,63,94,0.18)] hover:bg-rose-500/20"
-                    }`}
-                    title="Open link"
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                    Open
-                  </button>
-                ) : null}
-              </div>
+            {/* Plan deadline badge (e.g., "Day 1", "Week 1") */}
+            {!isTrace && type === "tactical" && data.planDeadline && (
+              <span
+                className={`pointer-events-auto rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                  isSurface
+                    ? "bg-amber-100 text-amber-700"
+                    : "bg-amber-500/20 text-amber-300"
+                }`}
+                title="Plan timeline"
+              >
+                {data.planDeadline}
+              </span>
             )}
           </div>
 
+          {/* ── Title ── */}
           <input
             value={data.title ?? ""}
             onChange={(e) => data.onUpdate?.(id, { title: e.target.value })}
@@ -526,16 +531,48 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
               "w-full bg-transparent font-semibold outline-none transition-colors",
               textPrimary,
               placeholderColor,
-              titleOnly ? "text-2xl" : "text-lg",
+              titleOnly ? "text-2xl leading-tight" : "text-lg leading-snug",
               isSurface ? "font-bold" : "font-semibold",
               isTrace ? "pointer-events-none" : "",
             ].join(" ")}
           />
 
+          {/* ── Meta row: deadline + open link (below title, not crammed into header) ── */}
+          {!isTrace && !titleOnly && (
+            <div className="mt-2 flex items-center gap-2 pointer-events-auto">
+              <div className="relative flex items-center">
+                <input
+                  type="date"
+                  value={data.deadline ?? ""}
+                  onChange={(e) => {
+                    const value = e.target.value || undefined;
+                    data.onUpdate?.(id, { deadline: value });
+                  }}
+                  className={`h-7 rounded-full border ${inputBorder} ${inputBg} px-3 text-[10px] ${isSurface ? 'text-slate-700' : 'text-cyan-50/80'} outline-none transition-all hover:opacity-80 focus:ring-1 focus:ring-cyan-300/20`}
+                  title="Set deadline"
+                />
+              </div>
+              {type === "resource" && data.link ? (
+                <button
+                  onClick={() => window.open(data.link, "_blank", "noopener,noreferrer")}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs transition-colors ${
+                    isSurface
+                      ? "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200"
+                      : "border-rose-300/20 bg-rose-500/10 text-rose-200 shadow-[0_0_14px_rgba(244,63,94,0.18)] hover:bg-rose-500/20"
+                  }`}
+                  title="Open link"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Open
+                </button>
+              ) : null}
+            </div>
+          )}
+
           {!titleOnly && !isTrace ? (
-            <div className="mt-3 space-y-3">
+            <div className="mt-4 space-y-4">
               {type === "resource" ? (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <input
                     value={data.link ?? ""}
                     onChange={(e) => data.onUpdate?.(id, { link: e.target.value })}
@@ -874,7 +911,8 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                 )}
               </div>
               
-              <div className="flex items-center justify-between pt-2">
+              {/* ── Footer: actions ── */}
+              <div className="flex items-center justify-between pt-3 mt-1 border-t border-white/5">
                 {type === "tactical" ? (
                   <AbyssalCheckbox
                     label="Done"
@@ -892,8 +930,8 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                     setTimeout(() => data.onDelete?.(id), 220);
                   }}
                   className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-                    isSurface 
-                      ? "border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200" 
+                    isSurface
+                      ? "border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200"
                       : "border-rose-300/20 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20"
                   }`}
                   title="Remove node from canvas"
@@ -902,7 +940,8 @@ export function GlassNode(props: NodeProps<GlassNodeData>) {
                 </button>
               </div>
 
-              <div className="flex items-center justify-center gap-2 pt-2 border-t border-white/5 mt-2">
+              {/* ── Color palette ── */}
+              <div className="flex items-center justify-center gap-3 pt-2">
                 {Object.values(COLORS).map((color) => {
                   const isSelected = (data.color || (isSurface ? "#94a3b8" : DEFAULT_COLOR)) === color.hex;
                   return (

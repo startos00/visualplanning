@@ -6,7 +6,10 @@ import { LightboxNode } from "./LightboxNode";
 import { MindMapNode } from "./MindMapNode";
 
 export const nodeTypes: NodeTypes = {
+  northstar: GlassNode,
+  vision: GlassNode,
   strategy: GlassNode,
+  operations: GlassNode,
   tactical: GlassNode,
   resource: GlassNode,
   sketch: SketchNode,

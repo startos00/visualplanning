@@ -66,7 +66,13 @@ Use `safeGetSession()` from `app/lib/safeSession.ts` for error-resilient session
 
 ### AI Integration
 - Multi-provider with fallback chain: user preferences → request params → env vars → defaults
-- Two agents: **Dumbo** (chat assistant), **Dumby** (document interrogation)
+- Three agents: **Dumbo** (chat/deadlines), **Dumby** (document interrogation), **Grimpy** (orchestrator/research)
+- **Grimpy Orchestrator** (`/api/grimpy/orchestrate`) coordinates all agents via tools + does web research
+  - Agent services extracted to `app/lib/ai/agents/` (dumbo.ts, dumby.ts, grimpy.ts, researcher.ts)
+  - Orchestrator tools in `app/lib/ai/tools/orchestrator.ts`
+  - Research powered by Tavily API (`TAVILY_API_KEY`) — web search, deep research, URL extraction, source curation
+  - Uses `streamText` + `stopWhen: stepCountIs(8)` for multi-step tool chains
+  - Claude Sonnet for orchestrator, Haiku for subagent calls (cost optimization)
 - Streaming responses via Vercel AI SDK `streamText()`
 - Model selection configurable per-user in `user_ai_preferences` table
 
@@ -83,7 +89,7 @@ Use `safeGetSession()` from `app/lib/safeSession.ts` for error-resilient session
 
 ## Key Features
 1. **Canvas** — Interactive graph with Strategy/Tactical/Resource/Sketch/Media/MindMap nodes
-2. **AI Assistants** — Dumbo (chat), Dumby (document analysis), Grimpy (workshop)
+2. **AI Assistants** — Dumbo (chat/deadlines), Dumby (document analysis), Grimpy (orchestrator/research engine)
 3. **Execution Mode** — Focus, Kanban, Today, List views for task management
 4. **Document Processing** — PDF upload, annotation, OCR (Tesseract.js), AI summarization
 5. **Abyssal Garden** — Gamified reward system with collectibles

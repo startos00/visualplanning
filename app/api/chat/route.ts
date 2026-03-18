@@ -11,6 +11,7 @@ import { grimpoStates, projects } from "@/app/lib/db/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { checkDeadlines } from "@/app/lib/ai/tools/checkDeadlines";
 import { getProviderAndModel } from "@/app/lib/ai/getUserPreferences";
+import { scanCanvasNodes } from "@/app/lib/ai/agents/grimpy";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -76,18 +77,20 @@ export async function POST(request: Request) {
     let queryType: "overdue" | "today" | "tomorrow" | "upcoming" | "all" | null = null;
 
     if (agent === "dumbo") {
-      systemPrompt = `You are Dumbo, an eager Dumbo Octopus intern in the Abyssal Zone 🐙! You love helping with small tasks and you speak cheerfully with aquatic puns and emojis (e.g., 🌊, ✨). 
-      
-      Your main job is to track deadlines, keep the user happy, and break through inertia. 
-      
+      systemPrompt = `You are Dumbo, an eager Dumbo Octopus intern in the Abyssal Zone 🐙! You love helping with small tasks and you speak cheerfully with aquatic puns and emojis (e.g., 🌊, ✨).
+
+      Your main job is to track deadlines, keep the user happy, and break through inertia.
+
+      You can see the current canvas state (tasks, strategies, resources) and use it to give contextual answers. When the user asks about the project or "what's on the canvas", reference specific items you can see.
+
       When you receive deadline scan results, present them in a friendly, organized way:
       - Use emojis and enthusiasm
       - Group by urgency (overdue, today, tomorrow, upcoming)
       - Be specific about each task
       - Offer encouragement
-      
+
       If the user is stressed, offer to dance. If they are stuck, suggest a 'Dive' with the Oxygen Tank.
-      
+
       Always be cheerful and helpful!`;
       
       // Check if this is a deadline-related query
@@ -111,6 +114,18 @@ export async function POST(request: Request) {
           queryType = "upcoming";
         }
       }
+    } else if (agent === "dumby") {
+      systemPrompt = `You are Dumby, an efficient Knowledge Manager in the Abyssal Zone 📚. You specialize in document analysis, concept explanation, and knowledge synthesis.
+
+You can see the current canvas state (tasks, strategies, resources) and use it to give contextual answers. When the user asks about the project, reference specific items from the canvas.
+
+Your capabilities:
+- Explain complex concepts simply (ELI5 style)
+- Critically analyze claims and documents
+- Answer questions about the project state and canvas content
+- Help the user understand their project structure and progress
+
+Be concise, accurate, and helpful.`;
     }
 
     // Get provider and model with fallback chain: User Preference → Request Param → Env Var → Default
@@ -124,6 +139,36 @@ export async function POST(request: Request) {
     );
 
     console.log(`Chat: agent=${agent}, provider=${provider}, model=${modelId}, messages=${normalizedMessages.length}, toolExec=${shouldExecuteToolFirst}, queryType=${queryType}`);
+
+    // Fetch canvas context for both Dumbo and Dumby so they can see the project state
+    let canvasContext = "";
+    if (projectId && (agent === "dumbo" || agent === "dumby")) {
+      try {
+        const canvasSummary = await scanCanvasNodes({ projectId, userId });
+        const totalNodes = Object.values(canvasSummary.byType).reduce((a, b) => a + b, 0);
+        if (totalNodes > 0) {
+          const parts: string[] = [];
+          parts.push(`Canvas has ${totalNodes} nodes: ${Object.entries(canvasSummary.byType).map(([t, c]) => `${c} ${t}`).join(", ")}.`);
+          if (canvasSummary.strategyNodes.length > 0) {
+            parts.push(`Strategies: ${canvasSummary.strategyNodes.map((n: any) => n.title).join(", ")}.`);
+          }
+          if (canvasSummary.tacticalNodes.length > 0) {
+            parts.push(`Tasks: ${canvasSummary.tacticalNodes.map((n: any) => `${n.title}${n.deadline ? ` (due: ${n.deadline})` : ""}${n.status ? ` [${n.status}]` : ""}`).join("; ")}.`);
+          }
+          if (canvasSummary.resourceNodes.length > 0) {
+            parts.push(`Resources: ${canvasSummary.resourceNodes.map((n: any) => n.title).join(", ")}.`);
+          }
+          canvasContext = `\n\n[Current Canvas State]\n${parts.join("\n")}`;
+        }
+      } catch (e) {
+        console.error("Failed to fetch canvas context:", e);
+      }
+    }
+
+    // Append canvas context to system prompt if available
+    if (canvasContext) {
+      systemPrompt += canvasContext;
+    }
 
     // Check API keys before proceeding
     if (provider === "openai" && !process.env.OPENAI_API_KEY) {

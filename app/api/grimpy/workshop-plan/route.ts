@@ -4,17 +4,34 @@ import { auth } from "@/app/lib/auth";
 import { generateObject } from "ai";
 import { openai, createOpenAI } from "@ai-sdk/openai";
 import { google } from "@ai-sdk/google";
+import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-// Schema for structured output - all fields must be required for OpenAI/Google structured outputs
+// Schema for structured output — 6-level planning hierarchy
+// North Star → Vision → Strategy → Operations → Tactical → Resource
 const planSchema = z.object({
-  strategy: z.object({
-    title: z.string(),
+  northStar: z.object({
+    title: z.string().describe("Core principle or rule guiding the project"),
     description: z.string(),
   }),
+  vision: z.object({
+    title: z.string().describe("Long-term coordinating plan"),
+    description: z.string(),
+  }),
+  strategy: z.object({
+    title: z.string().describe("Specific initiative to pursue"),
+    description: z.string(),
+  }),
+  operations: z.array(
+    z.object({
+      title: z.string().describe("Repeatable system or process"),
+      description: z.string().describe("Description or empty string"),
+      cadence: z.string().describe("Cadence like 'Weekly', 'Monthly' or empty string"),
+    })
+  ),
   milestones: z.array(
     z.object({
       title: z.string(),
@@ -24,9 +41,16 @@ const planSchema = z.object({
   ),
   tactics: z.array(
     z.object({
-      title: z.string(),
+      title: z.string().describe("Single action with a deadline"),
       description: z.string().describe("Description or empty string"),
       deadline: z.string().describe("Deadline like 'Day 1', 'Week 1' or empty string"),
+    })
+  ),
+  resources: z.array(
+    z.object({
+      title: z.string().describe("Supporting asset needed"),
+      description: z.string().describe("Description or empty string"),
+      link: z.string().describe("URL or empty string"),
     })
   ),
   timeline: z.object({
@@ -50,7 +74,7 @@ type WorkshopPlanBody = {
     constraints?: string;
   };
   projectId?: string;
-  provider?: "openai" | "google" | "openrouter";
+  provider?: "openai" | "google" | "anthropic" | "openrouter";
   model?: string;
 };
 
@@ -77,38 +101,47 @@ export async function POST(request: Request) {
 
     const timelineType = body.timelineType || "weekly";
 
-    // Default to openrouter provider (Google quota often exhausted)
+    // Provider selection: prefer Anthropic if key available, then openrouter, then google
     const openrouterKey = process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_KEY;
-    const provider: "openai" | "google" | "openrouter" =
+    const anthropicKey = process.env.ANTHROPIC_API_KEY;
+    const provider: "openai" | "google" | "anthropic" | "openrouter" =
       body?.provider === "openai"
         ? "openai"
         : body?.provider === "google"
           ? "google"
-          : openrouterKey
-            ? "openrouter"
-            : "google";
+          : body?.provider === "anthropic"
+            ? "anthropic"
+            : body?.provider === "openrouter"
+              ? "openrouter"
+              : anthropicKey
+                ? "anthropic"
+                : openrouterKey
+                  ? "openrouter"
+                  : "google";
 
     const requestedModel = typeof body?.model === "string" ? body.model.trim() : "";
 
-    const validModels = {
+    const validModels: Record<string, string[]> = {
       google: ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"],
       openai: ["gpt-4o", "gpt-4o-mini"],
+      anthropic: ["claude-sonnet-4-6", "claude-opus-4-6", "claude-haiku-4-5-20251001", "claude-3-5-sonnet-latest"],
       openrouter: [
-        "google/gemini-2.0-flash-exp:free",  // FREE
-        "google/gemini-2.0-flash-001",        // Very cheap
-        "anthropic/claude-3-5-haiku",         // Smart + cheap
-        "openai/gpt-4o-mini",                 // Reliable
+        "google/gemini-2.0-flash-exp:free",
+        "google/gemini-2.0-flash-001",
+        "anthropic/claude-3-5-haiku",
+        "openai/gpt-4o-mini",
       ],
     };
 
-    const defaultModels = {
+    const defaultModels: Record<string, string> = {
       google: "gemini-2.0-flash",
       openai: "gpt-4o-mini",
-      openrouter: "google/gemini-2.0-flash-001",  // ~$0.10/1M tokens, no rate limits
+      anthropic: "claude-sonnet-4-6",
+      openrouter: "google/gemini-2.0-flash-001",
     };
 
     const modelId =
-      requestedModel && validModels[provider].includes(requestedModel)
+      requestedModel && validModels[provider]?.includes(requestedModel)
         ? requestedModel
         : defaultModels[provider];
 
@@ -119,6 +152,9 @@ export async function POST(request: Request) {
     if (provider === "google" && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
       return NextResponse.json({ error: "Missing GOOGLE_GENERATIVE_AI_API_KEY" }, { status: 500 });
     }
+    if (provider === "anthropic" && !anthropicKey) {
+      return NextResponse.json({ error: "Missing ANTHROPIC_API_KEY" }, { status: 500 });
+    }
     if (provider === "openrouter" && !openrouterKey) {
       return NextResponse.json({ error: "Missing OpenRouter API key" }, { status: 500 });
     }
@@ -126,11 +162,12 @@ export async function POST(request: Request) {
     let model;
     if (provider === "google") {
       model = google(modelId);
+    } else if (provider === "anthropic") {
+      model = anthropic(modelId);
     } else if (provider === "openrouter") {
       const openrouter = createOpenAI({
         baseURL: "https://openrouter.ai/api/v1",
         apiKey: openrouterKey,
-        compatibility: "compatible",  // Use chat completions API, not responses API
       });
       model = openrouter(modelId);
     } else {
@@ -151,33 +188,46 @@ Constraints: ${body.context.constraints || "None specified"}
 
     const timelinePrompt = TIMELINE_PROMPTS[timelineType] || TIMELINE_PROMPTS.weekly;
 
-    const systemPrompt = `You are Grimpy, the Ancient Architect of the Deep. You are a strategic planning AI that transforms raw ideas into structured, actionable plans.
+    const systemPrompt = `You are Grimpy, the Ancient Architect of the Deep. You are a strategic planning AI that transforms raw ideas into structured, actionable plans using a 6-level planning hierarchy.
 
-Your task is to analyze the user's ideas and create a comprehensive project plan.
+The 6 levels (from highest to lowest abstraction):
+1. NORTH STAR — Core principle or rule that guides everything (e.g. "All content must be community-driven")
+2. VISION — Long-term coordinating plan (e.g. "Build a content ecosystem across Substack, social, and events")
+3. STRATEGY — Specific initiative to pursue (e.g. "Launch a weekly Substack newsletter")
+4. OPERATIONS — Repeatable systems or processes (e.g. "Monthly publishing cycle", "Weekly content review")
+5. TACTICAL — Single actions with deadlines (e.g. "Research competitors by Friday", "Send onboarding email")
+6. RESOURCE — Supporting assets needed (e.g. "Brand guidelines doc", "Email template", "Analytics dashboard")
 
 ${timelinePrompt}
 
 Guidelines:
-- Create a clear strategy with a compelling title and description
-- Generate practical, actionable tactics (tasks) from the ideas
+- Always generate a northStar (the guiding principle) and a vision (the long-term goal)
+- Create a clear strategy as the specific initiative
+- Generate operations (repeatable processes) when the plan involves ongoing work
+- Generate practical, actionable tactics (one-off tasks) from the ideas
+- Generate resources (supporting assets, tools, documents) needed to execute
 - If the timeline is monthly or longer, include milestones
-- Each tactic should be specific and achievable
-- Maintain the essence of the original ideas while making them actionable
+- Each tactic should be specific and achievable with a relative deadline
 - The summary should be a brief overview of the entire plan (2-3 sentences)
-- For deadlines, use relative terms like "Day 1", "Week 1", "Month 1" or specific dates if appropriate
+- For deadlines, use relative terms like "Day 1", "Week 1", "Month 1"
+- For operations cadence, use terms like "Daily", "Weekly", "Monthly"
 
 ${contextText}`;
 
-    const userPrompt = `Transform these ideas into a structured ${timelineType} plan:
+    const userPrompt = `Transform these ideas into a structured ${timelineType} plan using the full 6-level hierarchy:
 
 IDEAS:
 ${ideasText}
 
 Create a plan with:
-1. A strategy (the overarching goal)
-2. ${timelineType === "daily" ? "No milestones needed" : "Milestones (key checkpoints)"}
-3. Tactical tasks (actionable items derived from the ideas)
-4. A brief summary`;
+1. A north star (the guiding principle)
+2. A vision (the long-term goal)
+3. A strategy (the specific initiative)
+4. Operations (repeatable processes, if applicable)
+5. ${timelineType === "daily" ? "No milestones needed" : "Milestones (key checkpoints)"}
+6. Tactical tasks (one-off actionable items with deadlines)
+7. Resources (supporting assets, tools, or documents needed)
+8. A brief summary`;
 
     console.log(`Workshop plan: provider=${provider}, model=${modelId}, ideas=${body.ideas.length}, timeline=${timelineType}`);
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { PencilLine, Sparkles, Target, Wrench, Image as ImageIcon, Layers } from "lucide-react";
+import { PencilLine, Star, Eye, Compass, Repeat, Wrench, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type CreationDockProps = {
@@ -12,8 +12,7 @@ type CreationDockProps = {
   onClearDrawing?: () => void;
   activeColor?: string;
   onColorChange?: (color: string) => void;
-  handleAddNode: (type: "strategy" | "tactical" | "resource") => void;
-  handleAddMedia: (mode: "media" | "lightbox") => void;
+  handleAddNode: (type: "northstar" | "vision" | "strategy" | "operations" | "tactical" | "resource") => void;
 };
 
 const COLORS = [
@@ -33,7 +32,6 @@ export function CreationDock({
   activeColor = "#22d3ee",
   onColorChange,
   handleAddNode,
-  handleAddMedia,
 }: CreationDockProps) {
   const [open, setOpen] = useState(false);
 
@@ -78,56 +76,26 @@ export function CreationDock({
                 <PencilLine className="h-4 w-4" />
                 Sketch
               </button>
-              <button
-                className={`flex items-center gap-2 rounded-2xl px-4 py-2 text-left text-sm transition-colors ${itemButtonClasses}`}
-                onClick={() => {
-                  handleAddNode("strategy");
-                  setOpen(false);
-                }}
-              >
-                <Target className="h-4 w-4" />
-                Strategy
-              </button>
-              <button
-                className={`flex items-center gap-2 rounded-2xl px-4 py-2 text-left text-sm transition-colors ${itemButtonClasses}`}
-                onClick={() => {
-                  handleAddNode("tactical");
-                  setOpen(false);
-                }}
-              >
-                <Wrench className="h-4 w-4" />
-                Tactical
-              </button>
-              <button
-                className={`flex items-center gap-2 rounded-2xl px-4 py-2 text-left text-sm transition-colors ${itemButtonClasses}`}
-                onClick={() => {
-                  handleAddNode("resource");
-                  setOpen(false);
-                }}
-              >
-                <Sparkles className="h-4 w-4" />
-                Resource
-              </button>
-              <button
-                className={`flex items-center gap-2 rounded-2xl px-4 py-2 text-left text-sm transition-colors ${itemButtonClasses}`}
-                onClick={() => {
-                  handleAddMedia("media");
-                  setOpen(false);
-                }}
-              >
-                <ImageIcon className="h-4 w-4" />
-                Media
-              </button>
-              <button
-                className={`flex items-center gap-2 rounded-2xl px-4 py-2 text-left text-sm transition-colors ${itemButtonClasses}`}
-                onClick={() => {
-                  handleAddMedia("lightbox");
-                  setOpen(false);
-                }}
-              >
-                <Layers className="h-4 w-4" />
-                Lightbox
-              </button>
+              {([
+                { type: "northstar" as const, label: "North Star", Icon: Star },
+                { type: "vision" as const, label: "Vision", Icon: Eye },
+                { type: "strategy" as const, label: "Strategy", Icon: Compass },
+                { type: "operations" as const, label: "Operations", Icon: Repeat },
+                { type: "tactical" as const, label: "Tactical", Icon: Wrench },
+                { type: "resource" as const, label: "Resource", Icon: Sparkles },
+              ]).map(({ type, label, Icon }) => (
+                <button
+                  key={type}
+                  className={`flex items-center gap-2 rounded-2xl px-4 py-2 text-left text-sm transition-colors ${itemButtonClasses}`}
+                  onClick={() => {
+                    handleAddNode(type);
+                    setOpen(false);
+                  }}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </button>
+              ))}
             </motion.div>
           ) : null}
         </AnimatePresence>

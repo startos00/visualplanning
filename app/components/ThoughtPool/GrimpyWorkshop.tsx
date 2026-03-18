@@ -525,55 +525,74 @@ export function GrimpyWorkshop({
 
                   {/* Plan Summary */}
                   <div
-                    className={`rounded-xl border p-4 space-y-3 ${
+                    className={`rounded-xl border p-4 space-y-3 max-h-[350px] overflow-y-auto ${
                       isSurface
                         ? "border-slate-200 bg-slate-50"
                         : "border-violet-500/10 bg-slate-900/50"
                     }`}
                   >
+                    {/* North Star */}
+                    {plan.northStar && (
+                      <div>
+                        <span className={`text-[10px] font-bold uppercase tracking-wider ${isSurface ? "text-amber-500" : "text-amber-400/60"}`}>
+                          North Star
+                        </span>
+                        <h4 className={`font-semibold ${isSurface ? "text-slate-800" : "text-violet-100"}`}>
+                          {plan.northStar.title}
+                        </h4>
+                      </div>
+                    )}
+
+                    {/* Vision */}
+                    {plan.vision && (
+                      <div>
+                        <span className={`text-[10px] font-bold uppercase tracking-wider ${isSurface ? "text-purple-500" : "text-purple-400/60"}`}>
+                          Vision
+                        </span>
+                        <p className={`text-sm mt-1 ${isSurface ? "text-slate-600" : "text-violet-200/80"}`}>
+                          {plan.vision.title}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Strategy */}
                     <div>
-                      <span
-                        className={`text-[10px] font-bold uppercase tracking-wider ${
-                          isSurface ? "text-slate-400" : "text-violet-300/50"
-                        }`}
-                      >
+                      <span className={`text-[10px] font-bold uppercase tracking-wider ${isSurface ? "text-red-500" : "text-red-400/60"}`}>
                         Strategy
                       </span>
-                      <h4
-                        className={`font-semibold ${
-                          isSurface ? "text-slate-800" : "text-violet-100"
-                        }`}
-                      >
+                      <h4 className={`font-semibold ${isSurface ? "text-slate-800" : "text-violet-100"}`}>
                         {plan.strategy.title}
                       </h4>
-                      <p
-                        className={`text-sm mt-1 ${
-                          isSurface ? "text-slate-600" : "text-violet-200/80"
-                        }`}
-                      >
+                      <p className={`text-sm mt-1 ${isSurface ? "text-slate-600" : "text-violet-200/80"}`}>
                         {plan.strategy.description}
                       </p>
                     </div>
 
+                    {/* Operations */}
+                    {plan.operations && plan.operations.length > 0 && (
+                      <div>
+                        <span className={`text-[10px] font-bold uppercase tracking-wider ${isSurface ? "text-emerald-500" : "text-emerald-400/60"}`}>
+                          Operations ({plan.operations.length})
+                        </span>
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          {plan.operations.map((op, i) => (
+                            <span key={i} className={`rounded-lg px-2 py-1 text-xs ${isSurface ? "bg-emerald-100 text-emerald-700" : "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"}`}>
+                              {op.title}{op.cadence ? ` · ${op.cadence}` : ""}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Milestones */}
                     {plan.milestones && plan.milestones.length > 0 && (
                       <div>
-                        <span
-                          className={`text-[10px] font-bold uppercase tracking-wider ${
-                            isSurface ? "text-slate-400" : "text-violet-300/50"
-                          }`}
-                        >
+                        <span className={`text-[10px] font-bold uppercase tracking-wider ${isSurface ? "text-slate-400" : "text-violet-300/50"}`}>
                           Milestones ({plan.milestones.length})
                         </span>
                         <div className="flex flex-wrap gap-2 mt-1">
                           {plan.milestones.map((m, i) => (
-                            <span
-                              key={i}
-                              className={`rounded-lg px-2 py-1 text-xs ${
-                                isSurface
-                                  ? "bg-amber-100 text-amber-700"
-                                  : "bg-amber-500/10 text-amber-300 border border-amber-500/20"
-                              }`}
-                            >
+                            <span key={i} className={`rounded-lg px-2 py-1 text-xs ${isSurface ? "bg-amber-100 text-amber-700" : "bg-amber-500/10 text-amber-300 border border-amber-500/20"}`}>
                               {m.title}
                             </span>
                           ))}
@@ -581,29 +600,15 @@ export function GrimpyWorkshop({
                       </div>
                     )}
 
+                    {/* Tasks */}
                     <div>
-                      <span
-                        className={`text-[10px] font-bold uppercase tracking-wider ${
-                          isSurface ? "text-slate-400" : "text-violet-300/50"
-                        }`}
-                      >
+                      <span className={`text-[10px] font-bold uppercase tracking-wider ${isSurface ? "text-cyan-600" : "text-cyan-400/60"}`}>
                         Tasks ({plan.tactics.length})
                       </span>
                       <div className="mt-1 space-y-1 max-h-[150px] overflow-y-auto">
                         {plan.tactics.map((t, i) => (
-                          <div
-                            key={i}
-                            className={`flex items-center gap-2 text-sm ${
-                              isSurface ? "text-slate-600" : "text-violet-200/80"
-                            }`}
-                          >
-                            <span
-                              className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                                isSurface
-                                  ? "bg-cyan-100 text-cyan-600"
-                                  : "bg-cyan-500/20 text-cyan-300"
-                              }`}
-                            >
+                          <div key={i} className={`flex items-center gap-2 text-sm ${isSurface ? "text-slate-600" : "text-violet-200/80"}`}>
+                            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${isSurface ? "bg-cyan-100 text-cyan-600" : "bg-cyan-500/20 text-cyan-300"}`}>
                               {i + 1}
                             </span>
                             {t.title}
@@ -611,6 +616,22 @@ export function GrimpyWorkshop({
                         ))}
                       </div>
                     </div>
+
+                    {/* Resources */}
+                    {plan.resources && plan.resources.length > 0 && (
+                      <div>
+                        <span className={`text-[10px] font-bold uppercase tracking-wider ${isSurface ? "text-fuchsia-500" : "text-fuchsia-400/60"}`}>
+                          Resources ({plan.resources.length})
+                        </span>
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          {plan.resources.map((r, i) => (
+                            <span key={i} className={`rounded-lg px-2 py-1 text-xs ${isSurface ? "bg-fuchsia-100 text-fuchsia-700" : "bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20"}`}>
+                              {r.title}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Summary */}

@@ -106,33 +106,65 @@ function PlanPreview({ plan, onApply, theme = "abyss" }: PlanPreviewProps) {
             <div className={`px-4 pb-4 space-y-3 border-t ${
               isSurface ? "border-violet-200" : "border-violet-500/20"
             }`}>
-              <p
-                className={`text-sm pt-3 ${
-                  isSurface ? "text-violet-700" : "text-violet-200/80"
-                }`}
-              >
-                {plan.strategy.description}
-              </p>
+              {/* North Star */}
+              {plan.northStar && (
+                <div className="pt-3">
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${isSurface ? "text-amber-600" : "text-amber-400/60"}`}>
+                    North Star
+                  </span>
+                  <p className={`text-sm mt-1 ${isSurface ? "text-violet-700" : "text-violet-200/80"}`}>
+                    {plan.northStar.title}
+                  </p>
+                </div>
+              )}
 
+              {/* Vision */}
+              {plan.vision && (
+                <div>
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${isSurface ? "text-purple-500" : "text-purple-400/60"}`}>
+                    Vision
+                  </span>
+                  <p className={`text-sm mt-1 ${isSurface ? "text-violet-700" : "text-violet-200/80"}`}>
+                    {plan.vision.title}
+                  </p>
+                </div>
+              )}
+
+              {/* Strategy */}
+              <div>
+                <span className={`text-[10px] font-bold uppercase tracking-wider ${isSurface ? "text-red-500" : "text-red-400/60"}`}>
+                  Strategy
+                </span>
+                <p className={`text-sm mt-1 ${isSurface ? "text-violet-700" : "text-violet-200/80"}`}>
+                  {plan.strategy.description}
+                </p>
+              </div>
+
+              {/* Operations */}
+              {plan.operations && plan.operations.length > 0 && (
+                <div>
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${isSurface ? "text-emerald-600" : "text-emerald-400/60"}`}>
+                    Operations ({plan.operations.length})
+                  </span>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {plan.operations.map((op, i) => (
+                      <span key={i} className={`rounded-lg px-2 py-0.5 text-[11px] ${isSurface ? "bg-emerald-100 text-emerald-700" : "bg-emerald-500/20 text-emerald-300"}`}>
+                        {op.title}{op.cadence ? ` · ${op.cadence}` : ""}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Milestones */}
               {plan.milestones && plan.milestones.length > 0 && (
                 <div>
-                  <span
-                    className={`text-[10px] font-bold uppercase tracking-wider ${
-                      isSurface ? "text-violet-500" : "text-violet-400/60"
-                    }`}
-                  >
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${isSurface ? "text-violet-500" : "text-violet-400/60"}`}>
                     Milestones
                   </span>
                   <div className="flex flex-wrap gap-1.5 mt-1">
                     {plan.milestones.map((m, i) => (
-                      <span
-                        key={i}
-                        className={`rounded-lg px-2 py-0.5 text-[11px] ${
-                          isSurface
-                            ? "bg-amber-100 text-amber-700"
-                            : "bg-amber-500/20 text-amber-300"
-                        }`}
-                      >
+                      <span key={i} className={`rounded-lg px-2 py-0.5 text-[11px] ${isSurface ? "bg-amber-100 text-amber-700" : "bg-amber-500/20 text-amber-300"}`}>
                         {m.title}
                       </span>
                     ))}
@@ -140,20 +172,13 @@ function PlanPreview({ plan, onApply, theme = "abyss" }: PlanPreviewProps) {
                 </div>
               )}
 
+              {/* Tactics */}
               <div>
                 <div className="flex items-center justify-between">
-                  <span
-                    className={`text-[10px] font-bold uppercase tracking-wider ${
-                      isSurface ? "text-violet-500" : "text-violet-400/60"
-                    }`}
-                  >
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${isSurface ? "text-cyan-600" : "text-cyan-400/60"}`}>
                     Tasks ({plan.tactics.length})
                   </span>
-                  <span
-                    className={`text-[10px] ${
-                      isSurface ? "text-slate-500" : "text-violet-300/50"
-                    }`}
-                  >
+                  <span className={`text-[10px] ${isSurface ? "text-slate-500" : "text-violet-300/50"}`}>
                     {completedTactics.size > 0 && `${completedTactics.size} done`}
                   </span>
                 </div>
@@ -162,45 +187,39 @@ function PlanPreview({ plan, onApply, theme = "abyss" }: PlanPreviewProps) {
                     <label
                       key={i}
                       className={`flex items-center gap-2 text-xs cursor-pointer group ${
-                        completedTactics.has(i)
-                          ? isSurface
-                            ? "text-slate-400"
-                            : "text-violet-300/40"
-                          : isSurface
-                            ? "text-violet-700"
-                            : "text-violet-200/80"
+                        completedTactics.has(i) ? (isSurface ? "text-slate-400" : "text-violet-300/40") : (isSurface ? "text-violet-700" : "text-violet-200/80")
                       }`}
                     >
                       <input
                         type="checkbox"
                         checked={completedTactics.has(i)}
                         onChange={() => toggleTactic(i)}
-                        className={`w-3.5 h-3.5 rounded border cursor-pointer flex-shrink-0 ${
-                          isSurface
-                            ? "border-slate-300 accent-emerald-500"
-                            : "border-violet-500/30 accent-emerald-400 bg-slate-800"
-                        }`}
+                        className={`w-3.5 h-3.5 rounded border cursor-pointer flex-shrink-0 ${isSurface ? "border-slate-300 accent-emerald-500" : "border-violet-500/30 accent-emerald-400 bg-slate-800"}`}
                       />
-                      <span
-                        className={`truncate ${
-                          completedTactics.has(i) ? "line-through" : ""
-                        }`}
-                      >
-                        {t.title}
-                      </span>
+                      <span className={`truncate ${completedTactics.has(i) ? "line-through" : ""}`}>{t.title}</span>
                       {t.deadline && (
-                        <span
-                          className={`text-[9px] flex-shrink-0 ${
-                            isSurface ? "text-slate-400" : "text-violet-400/50"
-                          }`}
-                        >
-                          {t.deadline}
-                        </span>
+                        <span className={`text-[9px] flex-shrink-0 ${isSurface ? "text-slate-400" : "text-violet-400/50"}`}>{t.deadline}</span>
                       )}
                     </label>
                   ))}
                 </div>
               </div>
+
+              {/* Resources */}
+              {plan.resources && plan.resources.length > 0 && (
+                <div>
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${isSurface ? "text-fuchsia-500" : "text-fuchsia-400/60"}`}>
+                    Resources ({plan.resources.length})
+                  </span>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {plan.resources.map((r, i) => (
+                      <span key={i} className={`rounded-lg px-2 py-0.5 text-[11px] ${isSurface ? "bg-fuchsia-100 text-fuchsia-700" : "bg-fuchsia-500/20 text-fuchsia-300"}`}>
+                        {r.title}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Keep ideas checkbox */}
               <label
@@ -317,7 +336,7 @@ export function GrimpyWorkshopChat({
 
         const chunk = decoder.decode(value, { stream: true });
 
-        // Parse SSE format
+        // Parse Vercel AI SDK data stream format
         const lines = chunk.split("\n");
         for (const line of lines) {
           if (line.startsWith("0:")) {
@@ -330,6 +349,7 @@ export function GrimpyWorkshopChat({
               // Ignore parse errors
             }
           }
+          // Tool call results (9:) and other data types are handled silently
         }
       }
 

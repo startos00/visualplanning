@@ -54,6 +54,18 @@ PDF_SUMMARISER_MODEL=gemini-3-flash-preview
 BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...
 ```
 
+**Grimpy Research Engine** (optional — enables web search and deep research):
+```
+TAVILY_API_KEY=tvly-your_tavily_key_here
+```
+Get a free API key at https://tavily.com (1,000 free searches/month).
+
+**GitHub Integration** (optional — enables creating/syncing GitHub issues from plans):
+```
+GITHUB_TOKEN=ghp_your_github_personal_access_token
+```
+Create a Personal Access Token at https://github.com/settings/tokens with `repo` scope.
+
 **Optional OAuth Providers** (add these if you want Google/GitHub sign-in):
 ```
 BETTER_AUTH_GOOGLE_CLIENT_ID=your-google-client-id

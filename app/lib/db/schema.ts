@@ -273,8 +273,12 @@ export const ideas = pgTable(
 );
 
 // Workshop Plan type for generated plans
+// Follows the 6-level planning hierarchy: North Star → Vision → Strategy → Operations → Tactical → Resource
 export type WorkshopPlan = {
+  northStar?: { title: string; description: string };
+  vision?: { title: string; description: string };
   strategy: { title: string; description: string };
+  operations?: Array<{ title: string; description?: string; cadence?: string }>;
   milestones?: Array<{ title: string; targetDate?: string; description?: string }>;
   tactics: Array<{
     title: string;
@@ -282,6 +286,7 @@ export type WorkshopPlan = {
     deadline?: string;
     sourceIdeaId?: string;
   }>;
+  resources?: Array<{ title: string; description?: string; link?: string }>;
   timeline: {
     type: "daily" | "weekly" | "monthly" | "quarterly" | "phases";
     startDate?: string;
@@ -316,4 +321,27 @@ export type Idea = typeof ideas.$inferSelect;
 export type NewIdea = typeof ideas.$inferInsert;
 export type WorkshopSession = typeof workshopSessions.$inferSelect;
 export type NewWorkshopSession = typeof workshopSessions.$inferInsert;
+
+// Grimpy Memory table — persistent project-level memory across conversations
+export const grimpyMemories = pgTable(
+  "grimpy_memories",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    category: text("category").notNull(), // 'insight' | 'decision' | 'preference' | 'learning' | 'context'
+    content: text("content").notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    importance: integer("importance").notNull().default(5), // 1-10 scale
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userProjectIdx: index("idx_grimpy_memories_user_project").on(table.userId, table.projectId),
+    categoryIdx: index("idx_grimpy_memories_category").on(table.category),
+  }),
+);
+
+export type GrimpyMemory = typeof grimpyMemories.$inferSelect;
+export type NewGrimpyMemory = typeof grimpyMemories.$inferInsert;
 

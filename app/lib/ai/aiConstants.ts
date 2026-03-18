@@ -1,7 +1,7 @@
 // Client-safe AI provider and model constants
 // This file can be safely imported on both client and server
 
-export type AgentType = "dumbo" | "dumby";
+export type AgentType = "dumbo" | "dumby" | "grimpy";
 export type Provider = "openai" | "google" | "anthropic" | "openrouter";
 
 // Valid models per provider

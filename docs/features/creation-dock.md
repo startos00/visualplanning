@@ -12,8 +12,13 @@ As a user, I want a single, consistent place to create content (nodes) and enter
     - Fixed position at `bottom-6 right-24` (to the left of the Mascot Panel).
     - **Main "+" Button**: Expands/collapses a vertical menu of creation options.
     - **Sketch Button**: Toggles `isDrawingMode` state.
-    - **Media Button**: Spawns a 'media' (resource) node by calling `handleAddNode('media')`.
-    - **Note Button**: Spawns a 'text' (tactical) node by calling `handleAddNode('text')`.
+    - **Card Types** (listed from highest to lowest abstraction):
+        - **North Star** — Core principle or rule (e.g. "All content must be community-driven"). Spawns a 'northstar' node via `handleAddNode('northstar')`.
+        - **Vision** — Long-term coordinating plan (e.g. "Build a content ecosystem across Substack, social, and events"). Spawns a 'vision' node via `handleAddNode('vision')`.
+        - **Strategy** — Specific initiative (e.g. "Substack Article"). Spawns a 'strategy' node via `handleAddNode('strategy')`.
+        - **Operations** — Repeatable system or process (e.g. "Monthly publishing cycle"). Spawns an 'operations' node via `handleAddNode('operations')`.
+        - **Tactical** — Single action with a deadline (e.g. "Research", "Send an email"). Spawns a 'tactical' node via `handleAddNode('tactical')`.
+        - **Resource** — Supporting asset (e.g. "Settlement House", "Personality test"). Spawns a 'resource' node via `handleAddNode('resource')`.
 3. **Drawing Mode Interaction**:
     - When `isDrawingMode` is **TRUE**:
         - Hide the "+" button and the expanded menu.
@@ -28,7 +33,7 @@ As a user, I want a single, consistent place to create content (nodes) and enter
 
 ## User Flow
 1. **Open Dock**: User clicks the "+" button in the bottom-right (Creation Dock).
-2. **Expand Menu**: The menu expands vertically showing Sketch, Media, and Note options.
+2. **Expand Menu**: The menu expands vertically showing Sketch, North Star, Vision, Strategy, Operations, Tactical, and Resource options.
 3. **Start Drawing**: User clicks "Sketch".
     - `isDrawingMode` becomes `true`.
     - The dock UI transforms into a "DONE DRAWING" button.
@@ -37,15 +42,19 @@ As a user, I want a single, consistent place to create content (nodes) and enter
     - `isDrawingMode` becomes `false`.
     - UI returns to the standard "+" button dock.
 5. **Create Content**:
-    - User clicks "Note" -> A new text (tactical) node is spawned.
-    - User clicks "Media" -> A new media (resource) node is spawned.
+    - User clicks "North Star" -> A new northstar node is spawned.
+    - User clicks "Vision" -> A new vision node is spawned.
+    - User clicks "Strategy" -> A new strategy node is spawned.
+    - User clicks "Operations" -> A new operations node is spawned.
+    - User clicks "Tactical" -> A new tactical node is spawned.
+    - User clicks "Resource" -> A new resource node is spawned.
 
 ## Acceptance Criteria
 - The old "Add Node" button is completely removed.
 - The `CreationDock` component is correctly positioned at `bottom-6 right-24`.
 - The menu correctly expands and collapses with smooth animations.
 - The "DONE DRAWING" button correctly appears and disappears based on `isDrawingMode`.
-- Spawning nodes via "Media" and "Note" buttons works as expected.
+- Spawning nodes via all card type buttons (North Star, Vision, Strategy, Operations, Tactical, Resource) works as expected.
 - Drawing mode is correctly toggled and saved.
 
 ## Edge Cases

@@ -1,6 +1,6 @@
 import type { Edge, Node } from "reactflow";
 
-export type NodeKind = "strategy" | "tactical" | "resource" | "sketch" | "media" | "lightbox" | "mindmap";
+export type NodeKind = "northstar" | "vision" | "strategy" | "operations" | "tactical" | "resource" | "sketch" | "media" | "lightbox" | "mindmap";
 export type ModeSetting = "auto" | "strategy" | "tactical";
 export type TacticalStatus = "todo" | "in_progress" | "done";
 

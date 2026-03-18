@@ -231,3 +231,20 @@ CREATE TABLE IF NOT EXISTS workshop_sessions (
 CREATE INDEX IF NOT EXISTS idx_workshop_sessions_user_id ON workshop_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_workshop_sessions_project_id ON workshop_sessions(project_id);
 
+-- Grimpy Memory table — persistent project-level memory across conversations
+-- Allows Grimpy to accumulate understanding about each project over time
+CREATE TABLE IF NOT EXISTS grimpy_memories (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  category TEXT NOT NULL CHECK (category IN ('insight', 'decision', 'preference', 'learning', 'context')),
+  content TEXT NOT NULL,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  importance INTEGER NOT NULL DEFAULT 5 CHECK (importance >= 1 AND importance <= 10),
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_grimpy_memories_user_project ON grimpy_memories(user_id, project_id);
+CREATE INDEX IF NOT EXISTS idx_grimpy_memories_category ON grimpy_memories(category);
+

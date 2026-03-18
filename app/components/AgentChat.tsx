@@ -3,12 +3,14 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, X, MessageCircle, ChevronUp, ChevronDown, Sparkles, Clock, AlertTriangle, Calendar, Search } from "lucide-react";
+import { Send, X, MessageCircle, ChevronUp, ChevronDown, Sparkles, Clock, AlertTriangle, Calendar, Search, Target, Brain, ListChecks, Globe, BookOpen, Compass, Paperclip, FileText, Loader2, LayoutGrid, GitBranch, MemoryStick } from "lucide-react";
 import { Mascot, MascotVariant } from "./Mascot";
 import { AiProviderSelector } from "./ui/AiProviderSelector";
+import { OrchestratorStatusBar } from "./OrchestratorStatusBar";
 import type { AgentType, Provider } from "@/app/lib/ai/aiConstants";
 import { DEFAULT_MODELS } from "@/app/lib/ai/aiConstants";
 import { useChat } from "@ai-sdk/react";
+import type { WorkshopPlan } from "@/app/lib/db/schema";
 
 type AgentChatProps = {
   chat: {
@@ -24,6 +26,9 @@ type AgentChatProps = {
   theme?: "abyss" | "surface";
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
+  orchestrationStatus?: string | null;
+  projectId?: string;
+  onMdPlanGenerated?: (plan: WorkshopPlan) => void;
 };
 
 const PROVIDER_LABELS: Record<Provider, string> = {
@@ -33,7 +38,7 @@ const PROVIDER_LABELS: Record<Provider, string> = {
   openrouter: "OpenRouter",
 };
 
-export function AgentChat({ chat, agent, onAgentChange, theme = "abyss", isOpen: externalIsOpen, onOpenChange }: AgentChatProps) {
+export function AgentChat({ chat, agent, onAgentChange, theme = "abyss", isOpen: externalIsOpen, onOpenChange, orchestrationStatus, projectId, onMdPlanGenerated }: AgentChatProps) {
   const { messages, input, setInput, handleSubmit, append, isLoading } = chat;
   const [internalIsOpen, setInternalIsOpen] = useState(false);
 
@@ -52,6 +57,8 @@ export function AgentChat({ chat, agent, onAgentChange, theme = "abyss", isOpen:
   const [currentProvider, setCurrentProvider] = useState<Provider>("google");
   const [currentModel, setCurrentModel] = useState<string>(DEFAULT_MODELS.google);
   
+  const [isProcessingFile, setIsProcessingFile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -136,12 +143,86 @@ export function AgentChat({ chat, agent, onAgentChange, theme = "abyss", isOpen:
     append({ role: "user", content: text });
   };
 
-  const quickCommands = [
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Reset file input so the same file can be re-uploaded
+    e.target.value = "";
+
+    if (!file.name.endsWith(".md") && !file.name.endsWith(".txt")) {
+      setError("Only .md and .txt files are supported");
+      setTimeout(() => setError(null), 4000);
+      return;
+    }
+
+    if (file.size > 100_000) {
+      setError("File too large. Max 100KB.");
+      setTimeout(() => setError(null), 4000);
+      return;
+    }
+
+    setIsProcessingFile(true);
+
+    try {
+      const content = await file.text();
+
+      // Show the file in chat
+      append({ role: "user", content: `📄 Uploaded **${file.name}** — generating plan and canvas cards...` });
+
+      const res = await fetch("/api/grimpy/md-to-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, projectId }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to process file");
+      }
+
+      const { plan, ideasExtracted } = await res.json();
+
+      // Apply the plan to the canvas
+      if (onMdPlanGenerated && plan) {
+        onMdPlanGenerated(plan);
+        append({
+          role: "assistant",
+          content: `✅ Generated plan from **${file.name}** (${ideasExtracted} ideas extracted)!\n\n**${plan.strategy?.title || "Plan"}** — ${plan.summary || ""}\n\nCards have been added to your canvas.`,
+        });
+      } else {
+        append({
+          role: "assistant",
+          content: `Extracted ${ideasExtracted} ideas from **${file.name}**, but couldn't add cards to canvas. Try uploading from a project page.`,
+        });
+      }
+    } catch (err: any) {
+      setError(err.message || "Failed to process file");
+      setTimeout(() => setError(null), 5000);
+    } finally {
+      setIsProcessingFile(false);
+    }
+  }, [append, projectId, onMdPlanGenerated]);
+
+  const dumboQuickCommands = [
     { label: "Scan Deadlines", icon: Search, text: "scan deadlines" },
     { label: "Overdue", icon: AlertTriangle, text: "What's overdue?" },
     { label: "Today", icon: Calendar, text: "What's due today?" },
     { label: "Tomorrow", icon: Calendar, text: "What's due tomorrow?" },
     { label: "Urgent", icon: Clock, text: "Show me urgent tasks" },
+  ];
+
+  const grimpyQuickCommands = [
+    { label: "Full Pipeline", icon: Compass, text: "Run a full planning pipeline on my project — scope, prioritize, track, quality check, and review" },
+    { label: "Break & Build", icon: LayoutGrid, text: "Break down my project into epics and stories, then create all the tasks as nodes on my canvas" },
+    { label: "Prioritize", icon: Target, text: "Prioritize my current tasks using RICE scoring and tell me what to do first" },
+    { label: "Track Progress", icon: Brain, text: "Give me an execution status report — progress, blockers, risks, and what to do next" },
+    { label: "Quality Check", icon: Search, text: "Run a quality gate on my project and tell me what gaps need filling" },
+    { label: "Research", icon: Globe, text: "Research the main topic of my project and give me a brief with sources and directions" },
+    { label: "Find Resources", icon: BookOpen, text: "Find the best tools, guides, and resources for my current plan" },
+    { label: "Opportunities", icon: Compass, text: "Discover strategic opportunities and quick wins for my project" },
+    { label: "Push to GitHub", icon: GitBranch, text: "Sync my current tasks to GitHub issues so I can track them in my repo" },
+    { label: "What You Remember", icon: MemoryStick, text: "What do you remember about my project from previous conversations?" },
   ];
 
   const agentColors = {
@@ -270,6 +351,11 @@ export function AgentChat({ chat, agent, onAgentChange, theme = "abyss", isOpen:
                 </div>
               </div>
             ))}
+            {isLoading && agent === "grimpy" && orchestrationStatus && (
+              <div className="px-2">
+                <OrchestratorStatusBar status={orchestrationStatus} theme={theme} />
+              </div>
+            )}
             {isLoading && (
               <div className={`flex items-center gap-2 text-sm px-2 ${isSurface ? 'text-slate-600' : 'text-white/80'}`}>
                 <div className="flex gap-1">
@@ -288,11 +374,11 @@ export function AgentChat({ chat, agent, onAgentChange, theme = "abyss", isOpen:
           </div>
 
           {agent === "dumbo" && (
-            <div 
+            <div
               className={`flex flex-wrap gap-2 px-4 py-3 border-t ${isSurface ? 'bg-white border-slate-100' : 'bg-slate-900/80 border-white/10'}`}
               onPointerDown={(e) => e.stopPropagation()}
             >
-              {quickCommands.map((cmd) => (
+              {dumboQuickCommands.map((cmd) => (
                 <button
                   key={cmd.label}
                   onClick={(e) => handleQuickCommand(cmd.text)}
@@ -310,18 +396,73 @@ export function AgentChat({ chat, agent, onAgentChange, theme = "abyss", isOpen:
             </div>
           )}
 
-          <form 
-            onSubmit={(e) => handleSubmit(e)} 
+          {agent === "grimpy" && (
+            <div
+              className={`flex flex-wrap gap-2 px-4 py-3 border-t ${isSurface ? 'bg-white border-slate-100' : 'bg-slate-900/80 border-white/10'}`}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              {grimpyQuickCommands.map((cmd) => (
+                <button
+                  key={cmd.label}
+                  onClick={(e) => handleQuickCommand(cmd.text)}
+                  disabled={isLoading}
+                  className={`flex items-center gap-1.5 rounded-full border-2 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-all hover:scale-105 active:scale-95 disabled:opacity-50 ${
+                    isSurface
+                      ? "border-cyan-200 bg-cyan-50 text-cyan-800 hover:bg-cyan-100"
+                      : "border-cyan-500/40 bg-cyan-600/20 text-cyan-200 hover:bg-cyan-600/30"
+                  }`}
+                >
+                  <cmd.icon className="h-3 w-3" />
+                  {cmd.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Hidden file input for .md upload */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".md,.txt"
+            className="hidden"
+            onChange={handleFileUpload}
+          />
+
+          {/* File processing indicator */}
+          {isProcessingFile && (
+            <div className={`flex items-center gap-2 px-4 py-2 text-sm border-t ${isSurface ? 'bg-cyan-50 border-slate-100 text-cyan-700' : 'bg-cyan-900/30 border-white/10 text-cyan-300'}`}>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Processing file & generating plan...</span>
+            </div>
+          )}
+
+          <form
+            onSubmit={(e) => handleSubmit(e)}
             className={`border-t p-4 ${isSurface ? 'bg-white border-slate-100' : 'bg-slate-900 border-white/10'}`}
             onPointerDown={(e) => e.stopPropagation()}
           >
             <div className="flex gap-2">
+              {agent === "grimpy" && (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isLoading || isProcessingFile}
+                  title="Upload .md file to generate plan"
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border-2 transition-all disabled:opacity-50 ${
+                    isSurface
+                      ? "border-cyan-200 bg-cyan-50 text-cyan-600 hover:bg-cyan-100"
+                      : "border-cyan-500/40 bg-cyan-900/30 text-cyan-400 hover:bg-cyan-800/40"
+                  }`}
+                >
+                  <FileText className="h-5 w-5" />
+                </button>
+              )}
               <input
                 ref={inputRef}
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder={`Talk to ${agent}...`}
+                placeholder={agent === "grimpy" ? `Talk to ${agent} or upload .md...` : `Talk to ${agent}...`}
                 className={`flex-1 rounded-xl border-2 px-4 py-2.5 text-base outline-none transition-all focus:border-cyan-400 ${
                   isSurface
                     ? "border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400 focus:bg-white"

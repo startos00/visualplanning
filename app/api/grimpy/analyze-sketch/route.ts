@@ -10,8 +10,12 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const schema = z.object({
+  northStar: z.object({ title: z.string(), description: z.string() }).describe("Core guiding principle"),
+  vision: z.object({ title: z.string(), description: z.string() }).describe("Long-term coordinating plan"),
   strategy: z.object({ title: z.string(), description: z.string() }),
+  operations: z.array(z.object({ title: z.string(), cadence: z.string() })).describe("Repeatable processes"),
   tactics: z.array(z.object({ title: z.string(), dueInDays: z.number() })),
+  resources: z.array(z.object({ title: z.string(), description: z.string() })).describe("Supporting assets needed"),
   summary: z.string(),
 });
 
@@ -105,7 +109,7 @@ export async function POST(request: Request) {
         {
           role: "user",
           content: [
-            { type: "text", text: "Turn this whiteboard sketch into a project plan." },
+            { type: "text", text: "Turn this whiteboard sketch into a project plan using the 6-level hierarchy: North Star (core principle), Vision (long-term plan), Strategy (specific initiative), Operations (repeatable processes), Tactical (single actions with deadlines), and Resources (supporting assets needed)." },
             { type: "image", image: base64Image },
           ],
         },

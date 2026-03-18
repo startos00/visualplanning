@@ -318,6 +318,7 @@ function ProjectContent({ id }: { id: string }) {
   
   const [input, setInput] = useState("");
   const [chatData, setChatData] = useState<any[]>([]);
+  const [orchestrationStatus, setOrchestrationStatus] = useState<string | null>(null);
 
   // Refs for transport
   const currentAgentRef = useRef(currentAgent);
@@ -334,11 +335,20 @@ function ProjectContent({ id }: { id: string }) {
   const [chat] = useState(() => {
     const transport = new DefaultChatTransport({
       api: "/api/chat",
-      body: () => ({
-        agent: currentAgentRef.current,
-        userDateTime: new Date().toISOString(),
-        projectId: projectIdRef.current,
-      }),
+      body: () => {
+        const agent = currentAgentRef.current;
+        // Route Grimpy to the orchestrator endpoint
+        if (agent === "grimpy") {
+          (transport as any).api = "/api/grimpy/orchestrate";
+        } else {
+          (transport as any).api = "/api/chat";
+        }
+        return {
+          agent,
+          userDateTime: new Date().toISOString(),
+          projectId: projectIdRef.current,
+        };
+      },
     });
     return new Chat({ transport });
   });
@@ -347,10 +357,28 @@ function ProjectContent({ id }: { id: string }) {
     chat,
     onData: (data) => {
       setChatData(prev => [...prev, data]);
+      // Handle orchestration status events from Grimpy
+      if (data && typeof data === 'object' && 'type' in data) {
+        const eventType = (data as any).type;
+        if (eventType === 'orchestrationStatus') {
+          setOrchestrationStatus((data as any).status);
+        }
+        // Reload canvas when Grimpy creates/updates/deletes nodes
+        if (eventType === 'canvasUpdated') {
+          setReloadNonce((n) => n + 1);
+        }
+      }
     }
   });
 
   const isLoading = status === "submitted" || status === "streaming";
+
+  // Clear orchestration status when streaming completes
+  useEffect(() => {
+    if (!isLoading) {
+      setOrchestrationStatus(null);
+    }
+  }, [isLoading]);
 
   const append = useCallback(async (message: { role: "user" | "assistant" | "system"; content: string }): Promise<string | null | undefined> => {
     // AI SDK UI messages in this app use parts-based content.
@@ -805,65 +833,141 @@ function ProjectContent({ id }: { id: string }) {
       const anchor = getViewportCenterFlowPosition();
       const now = Date.now();
       const strategyId = `strategy-${now}`;
+      const allNodes: GrimpoNode[] = [];
+      const allEdges: any[] = [];
+      const anim = theme === "abyss";
 
-      // Create strategy node
-      const strategyNode: GrimpoNode = {
+      // Node spacing constants (node width = 340px)
+      const COL_GAP = 400; // 340 + 60 breathing room
+      const ROW_GAP = 280; // generous vertical spacing
+
+      // Helper: create a vertical edge (bottom→top) with label
+      const vEdge = (source: string, target: string, color: string, label?: string) => ({
+        id: `edge-${source}-${target}`,
+        source,
+        target,
+        sourceHandle: "bottom",
+        targetHandle: "top",
+        animated: anim,
+        label,
+        labelStyle: { fill: theme === "surface" ? "#64748b" : "rgba(255,255,255,0.6)", fontSize: 11, fontWeight: 600 },
+        labelBgStyle: { fill: theme === "surface" ? "#f8fafc" : "rgba(15,23,42,0.8)", fillOpacity: 0.9 },
+        labelBgPadding: [6, 4] as [number, number],
+        labelBgBorderRadius: 6,
+        style: { stroke: color, strokeWidth: 2 },
+      });
+
+      // Helper: create a horizontal edge (right→left)
+      const hEdge = (source: string, target: string, color: string, label?: string) => ({
+        id: `edge-${source}-${target}`,
+        source,
+        target,
+        sourceHandle: "right",
+        targetHandle: "left",
+        animated: anim,
+        label,
+        labelStyle: { fill: theme === "surface" ? "#64748b" : "rgba(255,255,255,0.6)", fontSize: 11, fontWeight: 600 },
+        labelBgStyle: { fill: theme === "surface" ? "#f8fafc" : "rgba(15,23,42,0.8)", fillOpacity: 0.9 },
+        labelBgPadding: [6, 4] as [number, number],
+        labelBgBorderRadius: 6,
+        style: { stroke: color, strokeWidth: 2 },
+      });
+
+      // Row 0: North Star (top center)
+      const northStarId = `northstar-${now}`;
+      if (plan.northStar) {
+        allNodes.push({
+          id: northStarId,
+          type: "northstar",
+          position: { x: anchor.x, y: anchor.y - ROW_GAP * 2 },
+          data: { title: plan.northStar.title, notes: plan.northStar.description, color: "#f59e0b" } as any,
+        });
+      }
+
+      // Row 1: Vision
+      const visionId = `vision-${now}`;
+      if (plan.vision) {
+        allNodes.push({
+          id: visionId,
+          type: "vision",
+          position: { x: anchor.x, y: anchor.y - ROW_GAP },
+          data: { title: plan.vision.title, notes: plan.vision.description, color: "#a78bfa" } as any,
+        });
+        if (plan.northStar) {
+          allEdges.push(vEdge(northStarId, visionId, "rgba(167,139,250,0.55)", "guides"));
+        }
+      }
+
+      // Row 2: Strategy (anchor point)
+      allNodes.push({
         id: strategyId,
         type: "strategy",
         position: { x: anchor.x, y: anchor.y },
-        data: {
-          title: plan.strategy.title,
-          notes: plan.strategy.description,
-          color: "#ef4444",
-        } as any,
-      };
+        data: { title: plan.strategy.title, notes: plan.strategy.description, color: "#ef4444" } as any,
+      });
+      if (plan.vision) {
+        allEdges.push(vEdge(visionId, strategyId, "rgba(239,68,68,0.55)", "drives"));
+      } else if (plan.northStar) {
+        allEdges.push(vEdge(northStarId, strategyId, "rgba(239,68,68,0.55)", "drives"));
+      }
 
-      // Create milestone nodes (if any)
-      const milestoneNodes: GrimpoNode[] = (plan.milestones || []).map((m, index) => ({
-        id: `milestone-${now}-${index}`,
-        type: "strategy",
-        position: { x: anchor.x + (index + 1) * 300, y: anchor.y - 150 },
-        data: {
-          title: m.title,
-          notes: m.description || m.targetDate ? `Target: ${m.targetDate}` : "",
-          color: "#f59e0b",
-        } as any,
-      }));
+      // Row 2.5: Milestones (right of strategy, horizontal relationship)
+      (plan.milestones || []).forEach((m, index) => {
+        const id = `milestone-${now}-${index}`;
+        allNodes.push({
+          id,
+          type: "strategy",
+          position: { x: anchor.x + (index + 1) * COL_GAP, y: anchor.y },
+          data: { title: m.title, notes: m.description || (m.targetDate ? `Target: ${m.targetDate}` : ""), color: "#f59e0b" } as any,
+        });
+        const prevId = index === 0 ? strategyId : `milestone-${now}-${index - 1}`;
+        allEdges.push(hEdge(prevId, id, "rgba(245,158,11,0.55)", index === 0 ? "milestone" : undefined));
+      });
 
-      // Create tactical nodes with deadlines
+      // Row 3: Operations (below strategy, left side)
+      const TACTIC_COLS = 3;
+      (plan.operations || []).forEach((op, index) => {
+        const id = `operations-${now}-${index}`;
+        allNodes.push({
+          id,
+          type: "operations",
+          position: { x: anchor.x - COL_GAP + (index % 2) * COL_GAP, y: anchor.y + ROW_GAP + Math.floor(index / 2) * ROW_GAP },
+          data: { title: op.title, notes: [op.description, op.cadence ? `Cadence: ${op.cadence}` : ""].filter(Boolean).join("\n"), color: "#10b981" } as any,
+        });
+        allEdges.push(vEdge(strategyId, id, "rgba(16,185,129,0.55)", index === 0 ? "operates" : undefined));
+      });
+
+      // Row 3: Tactical nodes (below strategy, right side)
       const completedSet = new Set(completedTacticIndexes);
-      const tacticNodes: GrimpoNode[] = plan.tactics.map((t, index) => ({
-        id: `tactical-${now}-${index}`,
-        type: "tactical",
-        position: { x: anchor.x + (index % 4) * 280, y: anchor.y + 200 + Math.floor(index / 4) * 200 },
-        data: {
-          title: t.title,
-          notes: t.description || "",
-          status: completedSet.has(index) ? "done" : "todo",
-          planDeadline: t.deadline, // Relative deadline: "Day 1", "Week 1", etc.
-          color: "#22d3ee",
-        } as any,
-      }));
+      const opsCount = (plan.operations || []).length;
+      const tacticXOffset = opsCount > 0 ? COL_GAP : 0;
+      plan.tactics.forEach((t, index) => {
+        const id = `tactical-${now}-${index}`;
+        allNodes.push({
+          id,
+          type: "tactical",
+          position: { x: anchor.x + tacticXOffset + (index % TACTIC_COLS) * COL_GAP, y: anchor.y + ROW_GAP + Math.floor(index / TACTIC_COLS) * ROW_GAP },
+          data: { title: t.title, notes: t.description || "", status: completedSet.has(index) ? "done" : "todo", planDeadline: t.deadline, color: "#22d3ee" } as any,
+        });
+        allEdges.push(vEdge(strategyId, id, "rgba(34,211,238,0.55)", index === 0 ? "tasks" : undefined));
+      });
 
-      // Create edges from strategy to milestones and tactics
-      const milestoneEdges = milestoneNodes.map((mNode) => ({
-        id: `edge-${strategyId}-${mNode.id}`,
-        source: strategyId,
-        target: mNode.id,
-        animated: theme === "abyss",
-        style: { stroke: "rgba(239,68,68,0.55)" },
-      }));
+      // Row 4: Resources (bottom, connected to strategy)
+      const tacticRows = Math.ceil(plan.tactics.length / TACTIC_COLS);
+      const resourceY = anchor.y + ROW_GAP + tacticRows * ROW_GAP + 100;
+      (plan.resources || []).forEach((r, index) => {
+        const id = `resource-${now}-${index}`;
+        allNodes.push({
+          id,
+          type: "resource",
+          position: { x: anchor.x + (index % TACTIC_COLS) * COL_GAP, y: resourceY + Math.floor(index / TACTIC_COLS) * ROW_GAP },
+          data: { title: r.title, notes: r.description || "", link: r.link || "", color: "#e879f9" } as any,
+        });
+        allEdges.push(vEdge(strategyId, id, "rgba(232,121,249,0.55)", index === 0 ? "resources" : undefined));
+      });
 
-      const tacticEdges = tacticNodes.map((tNode) => ({
-        id: `edge-${strategyId}-${tNode.id}`,
-        source: strategyId,
-        target: tNode.id,
-        animated: theme === "abyss",
-        style: { stroke: "rgba(239,68,68,0.55)" },
-      }));
-
-      setNodes((nds) => nds.concat([strategyNode, ...milestoneNodes, ...tacticNodes]));
-      setEdges((eds) => eds.concat([...milestoneEdges, ...tacticEdges] as any));
+      setNodes((nds) => nds.concat(allNodes));
+      setEdges((eds) => eds.concat(allEdges));
 
       // Only mark ideas as processed if user chose not to keep them
       if (!keepIdeas) {
@@ -994,12 +1098,15 @@ function ProjectContent({ id }: { id: string }) {
       }
 
       const base = { title: "", notes: "" } satisfies GrimpoNodeData;
-      const data: GrimpoNodeData =
-        kind === "strategy"
-          ? { ...base, title: "New strategy", notes: "Big picture…" }
-          : kind === "tactical"
-            ? { ...base, title: "New task", notes: "Next step…", status: "todo" }
-            : { ...base, title: "New resource", notes: "Summary…", link: "" };
+      const dataMap: Record<string, GrimpoNodeData> = {
+        northstar: { ...base, title: "New north star", notes: "Core principle…" },
+        vision: { ...base, title: "New vision", notes: "Long-term plan…" },
+        strategy: { ...base, title: "New strategy", notes: "Big picture…" },
+        operations: { ...base, title: "New operations", notes: "Repeatable process…" },
+        tactical: { ...base, title: "New task", notes: "Next step…", status: "todo" },
+        resource: { ...base, title: "New resource", notes: "Summary…", link: "" },
+      };
+      const data: GrimpoNodeData = dataMap[kind] ?? { ...base, title: `New ${kind}` };
 
       setNodes((nds) => nds.concat({ id, type: kind, position, data }));
     },
@@ -1648,7 +1755,6 @@ function ProjectContent({ id }: { id: string }) {
           onColorChange={setPenColor}
           onDoneDrawing={finishDrawing}
           handleAddNode={handleAddNode}
-          handleAddMedia={handleAddMedia}
         />
       )}
 
@@ -1746,6 +1852,9 @@ function ProjectContent({ id }: { id: string }) {
         theme={theme}
         isOpen={chatOpen}
         onOpenChange={setChatOpen}
+        orchestrationStatus={orchestrationStatus}
+        projectId={id}
+        onMdPlanGenerated={(plan) => applyWorkshopPlan(plan, true, [])}
       />
     </div>
   );

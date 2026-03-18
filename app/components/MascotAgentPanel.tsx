@@ -6,7 +6,8 @@ import {
   Book, FileText, Youtube, Highlighter, ListChecks,
   LayoutTemplate, Link as LinkIcon, Lightbulb,
   Network, MessageSquareQuote, Shuffle, Music, ListTodo,
-  Target, MessageCircle
+  Target, MessageCircle, Brain, Globe, BookOpen,
+  LayoutGrid, GitBranch
 } from "lucide-react";
 import { Mascot, MascotVariant } from "./Mascot";
 
@@ -95,6 +96,46 @@ export function MascotAgentPanel({
       case "generateProjectPlan":
         onOpenThoughtPool?.();
         break;
+      case "reviewProgress":
+        onOpenChat?.("grimpy");
+        onAppend({ role: "user", content: "Review my progress and tell me how I'm doing" });
+        break;
+      case "focusToday":
+        onOpenChat?.("grimpy");
+        onAppend({ role: "user", content: "What should I focus on today?" });
+        break;
+      case "planNextWeek":
+        onOpenChat?.("grimpy");
+        onAppend({ role: "user", content: "Plan my next week based on current tasks" });
+        break;
+      case "fullPipeline":
+        onOpenChat?.("grimpy");
+        onAppend({ role: "user", content: "Run a full planning pipeline on my project — scope, prioritize, track, quality check, and review" });
+        break;
+      case "breakItDown":
+        onOpenChat?.("grimpy");
+        onAppend({ role: "user", content: "Break down my project into epics and stories with acceptance criteria" });
+        break;
+      case "deepResearch":
+        onOpenChat?.("grimpy");
+        onAppend({ role: "user", content: "Research the main topic of my project and give me a comprehensive brief with sources and directions" });
+        break;
+      case "findResources":
+        onOpenChat?.("grimpy");
+        onAppend({ role: "user", content: "Find the best tools, guides, and resources for my current plan" });
+        break;
+      case "qualityCheck":
+        onOpenChat?.("grimpy");
+        onAppend({ role: "user", content: "Run a quality gate on my project and tell me what gaps need filling" });
+        break;
+      case "breakAndBuild":
+        onOpenChat?.("grimpy");
+        onAppend({ role: "user", content: "Break down my project into epics and stories, then create all the tasks as nodes on my canvas" });
+        break;
+      case "pushToGithub":
+        onOpenChat?.("grimpy");
+        onAppend({ role: "user", content: "Sync my current tasks to GitHub issues so I can track them in my repo" });
+        break;
       case "linkStrategyToResources":
         onAppend({ role: "user", content: "Link my strategic goals to relevant research nodes." });
         break;
@@ -136,10 +177,15 @@ export function MascotAgentPanel({
     ],
     grimpy: [
       { id: "openChat", icon: MessageCircle, label: "Chat" },
-      { id: "generateProjectPlan", icon: LayoutTemplate, label: "Generate Plan" },
-      { id: "linkStrategyToResources", icon: LinkIcon, label: "Link Strategy" },
-      { id: "suggestResources", icon: Lightbulb, label: "Suggest Resources" },
-      { id: "groupSimilarTasks", icon: Network, label: "Semantic Group" },
+      { id: "fullPipeline", icon: LayoutTemplate, label: "Full Pipeline" },
+      { id: "breakAndBuild", icon: LayoutGrid, label: "Break & Build" },
+      { id: "deepResearch", icon: Globe, label: "Deep Research" },
+      { id: "findResources", icon: BookOpen, label: "Find Resources" },
+      { id: "reviewProgress", icon: Target, label: "Track Progress" },
+      { id: "qualityCheck", icon: AlertTriangle, label: "Quality Gate" },
+      { id: "pushToGithub", icon: GitBranch, label: "GitHub Sync" },
+      { id: "focusToday", icon: Lightbulb, label: "Focus Today" },
+      { id: "generateProjectPlan", icon: LayoutTemplate, label: "Workshop" },
       { id: "sonarPing", icon: MessageSquareQuote, label: "Sonar Ping" },
       { id: "lateralDrift", icon: Shuffle, label: "Lateral Drift" },
     ],
